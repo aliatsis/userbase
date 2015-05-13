@@ -9,6 +9,12 @@ module.exports = {
     },
     usernameField: 'username',
     passwordField: 'password',
+    saltField: 'salt',
+    hashField: 'hash',
+    lastLoginField: 'lastLogin',
+    lastLogoutField: 'lastLogout',
+    loginAttemptsField: 'loginAttempts',
+    loginAttemptLockTimeField: 'loginAttemptLockTime',
     loginAttemptLimit: 5,
     loginAttemptLockDuration: 15, // minutes
     pbkdf2Iterations: 25000,
