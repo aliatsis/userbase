@@ -4,7 +4,7 @@ var log = require('bunyan').createLogger({
     name: 'user: UserController'
 });
 
-var AuthController = require('./controllers/AuthController');
+var AuthController = require('./AuthController');
 var db = require('../db');
 
 ///////////////////////////
@@ -33,7 +33,7 @@ function logout(options, req, res) {
 }
 
 function saveNewUser(bodyProps, options) {
-    var password = bodyProps[options.passwordProperty];
+    var password = bodyProps[options.passwordField];
 
     return AuthController.getHashAndSaltForPassword(password, options).then(function(hashAndSalt) {
         var props = extend({}, bodyProps, hashAndSalt); // make copy to be safe
@@ -43,22 +43,22 @@ function saveNewUser(bodyProps, options) {
 }
 
 function signup(options, req, res, next) {
-    var username = req.body[options.usernameProperty];
-    var password = req.body[options.passwordProperty];
+    var username = req.body[options.usernameField];
+    var password = req.body[options.passwordField];
 
     if (!username) {
-        next(new Error('MissingUsernameError: signup missing username in request property ' + options.usernameProperty));
+        next(new Error('MissingUsernameError: signup missing username in request property ' + options.usernameField));
     }
 
     if (!password) {
-        next(new Error('MissingPasswordError: signup missing password in request property ' + options.passwordProperty));
+        next(new Error('MissingPasswordError: signup missing password in request property ' + options.passwordField));
     }
 
     log.info('Signing Up User:', username);
 
     db.get().findByUsername(username).then(function(existingUser) {
         if (existingUser) {
-            next(new Error('ExistingUserError: a user already exists with the ' + options.usernameProperty + ' ' + username));
+            next(new Error('ExistingUserError: a user already exists with the ' + options.usernameField + ' ' + username));
         }
 
         saveNewUser(req.body, options).then(function(newUser) {

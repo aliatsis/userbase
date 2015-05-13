@@ -1,14 +1,14 @@
 module.exports = {
     port: process.env.PORT || 8080,
     basePath: '/api',
-    userPath: '/user'
+    userPath: '/user',
     routes: {
         login: '/login',
         logout: '/logout',
         signup: '/signup'
     },
-    usernameProperty: 'username',
-    passwordProperty: 'password',
+    usernameField: 'username',
+    passwordField: 'password',
     loginAttemptLimit: 5,
     loginAttemptLockDuration: 15, // minutes
     pbkdf2Iterations: 25000,

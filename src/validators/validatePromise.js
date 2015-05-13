@@ -1,7 +1,8 @@
 var Promise = require("es6-promise").Promise;
 
 module.exports = function(promise, errorDescription) {
-    if (promise instanceof Promise) {
+    // if (promise instanceof Promise) {
+    if (typeof promise.then === 'function') {
         return promise;
     } else {
         var errorMsg;

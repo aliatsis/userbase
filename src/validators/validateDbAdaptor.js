@@ -1,16 +1,16 @@
 var schema = require('validate');
 
 /*****************************
-	USER PROPERTIES 
+	USER OPTION FIELDS
  *****************************
- 	- {options.usernameProperty}
- 	- {options.passwordProperty}
-	- salt
-	- hash
-	- lastLogin
-	- lastLogout
-	- loginAttempts
-	- loginAttemptLockTime
+ 	- usernameField
+ 	- passwordField
+	- saltField
+	- hashField
+	- lastLoginField
+	- lastLogoutField
+	- loginAttemptsField
+	- loginAttemptLockTimeField
 */
 
 

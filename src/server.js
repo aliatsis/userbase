@@ -10,7 +10,7 @@ var log = require('bunyan').createLogger({
 });
 
 var db = require('./db');
-var AuthController = require('../controllers/AuthController');
+var AuthController = require('./controllers/AuthController');
 var router = require('./router');
 var defaultOptions = require('./defaultOptions');
 
@@ -31,9 +31,9 @@ function init(app, dbAdaptor, options) {
     AuthController.init(app, options);
 
     // connect to db
-    db.then(function() {
+    db.connect(dbAdaptor).then(function() {
         // register api routes on successful db connection
-        router.init(app);
+        router.init(app, options);
         log.info('Registered API routes');
 
         // error handler configuration after routers are registered

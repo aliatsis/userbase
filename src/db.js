@@ -19,7 +19,7 @@ function connect(dbAdaptor) {
     var dbConnectPromise = validatePromise(dbAdaptor.connect(), 'connect() function of database adaptor');
     adaptor = dbAdaptor;
 
-    dbConnectPromise.then(function() {
+    return dbConnectPromise.then(function() {
         log.info('Successfully connected to database');
     });
 }

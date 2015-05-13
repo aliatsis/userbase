@@ -254,5 +254,5 @@ module.exports = {
     init: init,
     authenticate: authenticate,
     serializeWithToken: serializeWithToken,
-    getHashForPassword: getHashForPassword
+    getHashAndSaltForPassword: getHashAndSaltForPassword
 };
