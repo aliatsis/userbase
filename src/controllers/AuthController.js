@@ -7,7 +7,6 @@ var crypto = require('crypto');
 var jwt = require('jsonwebtoken');
 var scmp = require('scmp');
 
-var UserController = require('./UserController');
 var db = require('../db');
 
 var localAuthenticator;
@@ -18,7 +17,7 @@ var jwtAuthenticator;
 ///////////////////////////
 
 function authenticate(ignoredPaths, options) {
-    var middleware = function(req, res, next) {
+    var middleware = function(req, res) {
         var authenticator = jwtAuthenticator;
 
         // use local strategy for login request
@@ -70,11 +69,23 @@ function serializeWithToken(user, options) {
     return {
         token: generateToken(user, options),
         user: db.get().serialize(user)
-    }
+    };
 }
 
 function authenticatePassword(user, password, options) {
     return new Promise(function(resolve, reject) {
+
+        var salt = db.get().getSalt(user);
+
+        if (!salt) {
+            return reject({
+                result: false,
+                info: {
+                    message: 'NoSaltValueStoredError'
+                }
+            });
+        }
+
         crypto.pbkdf2(password, salt, options.pbkdf2Iterations, options.pbkdf2KeyLength, function(err, hashRaw) {
             if (err) {
                 reject({
@@ -95,9 +106,7 @@ function authenticatePassword(user, password, options) {
                     });
                 }
 
-                resolve({
-                    result: serializeWithToken(user, options)
-                });
+                resolve();
 
                 return;
             } else {
@@ -138,29 +147,18 @@ function authenticateUser(user, password, options) {
             });
         }
 
-        var salt = db.get().getSalt(user);
-
-        if (!salt) {
-            return reject({
-                result: false,
-                info: {
-                    message: 'NoSaltValueStoredError'
-                }
-            });
-        }
-
         resolve();
     }).then(
         authenticatePassword.bind(null, user, password, options)
     );
 }
 
-function localAuthenticate() {
+function localAuthenticate(options) {
     return function(username, password, done) {
-        db.get().findByUsername(username).then(function(user) {
+        return db.get().findByUsername(username).then(function(user) {
             if (user) {
                 return authenticateUser(user, password, options).then(function() {
-
+                    done(null, serializeWithToken(user, options));
                 }, function(reason) {
                     done(reason.error, reason.result, reason.info);
                 });
@@ -175,9 +173,9 @@ function localAuthenticate() {
     };
 }
 
-function jwtAuthenticate() {
+function jwtAuthenticate(options) {
     return function(jwtPayload, done) {
-        db.get().findById(jwtPayload.sub).then(function(user) {
+        return db.get().findById(jwtPayload.sub).then(function(user) {
             if (user) {
                 done(null, db.get().serialize(user));
             } else {
@@ -192,13 +190,16 @@ function jwtAuthenticate() {
 }
 
 function createLocalStrategy(options) {
-    return new LocalStrategy(localAuthenticate());
+    return new LocalStrategy({
+        usernameField: options.usernameProperty,
+        passwordField: options.passwordProperty
+    }, localAuthenticate(options));
 }
 
 function createJWTStrategy(options) {
     return new JwtStrategy({
         secretOrKey: options.secretOrKey
-    }, jwtAuthenticate());
+    }, jwtAuthenticate(options));
 }
 
 function getAuthenticator(strategy) {
