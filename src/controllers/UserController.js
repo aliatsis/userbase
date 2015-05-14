@@ -33,7 +33,7 @@ function logout(options, req, res) {
 }
 
 function saveNewUser(bodyProps, options) {
-    var password = bodyProps[options.passwordField];
+    var password = bodyProps[options.passwordProperty];
 
     return AuthController.getHashAndSaltForPassword(password, options).then(function(hashAndSalt) {
         var props = extend({}, bodyProps, hashAndSalt); // make copy to be safe
@@ -43,22 +43,22 @@ function saveNewUser(bodyProps, options) {
 }
 
 function signup(options, req, res, next) {
-    var username = req.body[options.usernameField];
-    var password = req.body[options.passwordField];
+    var username = req.body[options.usernameProperty];
+    var password = req.body[options.passwordProperty];
 
     if (!username) {
-        next(new Error('MissingUsernameError: signup missing username in request property ' + options.usernameField));
+        next(new Error('MissingUsernameError: signup missing username in request property ' + options.usernameProperty));
     }
 
     if (!password) {
-        next(new Error('MissingPasswordError: signup missing password in request property ' + options.passwordField));
+        next(new Error('MissingPasswordError: signup missing password in request property ' + options.passwordProperty));
     }
 
     log.info('Signing Up User:', username);
 
     db.get().findByUsername(username).then(function(existingUser) {
         if (existingUser) {
-            next(new Error('ExistingUserError: a user already exists with the ' + options.usernameField + ' ' + username));
+            next(new Error('ExistingUserError: a user already exists with the ' + options.usernameProperty + ' ' + username));
         }
 
         saveNewUser(req.body, options).then(function(newUser) {

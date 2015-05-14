@@ -1,19 +1,5 @@
 var schema = require('validate');
 
-/*****************************
-	USER OPTION FIELDS
- *****************************
- 	- usernameField
- 	- passwordField
-	- saltField
-	- hashField
-	- lastLoginField
-	- lastLogoutField
-	- loginAttemptsField
-	- loginAttemptLockTimeField
-*/
-
-
 var dbAdaptorSchema = schema({
     connect: {
         type: 'function',

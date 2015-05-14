@@ -7,14 +7,8 @@ module.exports = {
         logout: '/logout',
         signup: '/signup'
     },
-    usernameField: 'username',
-    passwordField: 'password',
-    saltField: 'salt',
-    hashField: 'hash',
-    lastLoginField: 'lastLogin',
-    lastLogoutField: 'lastLogout',
-    loginAttemptsField: 'loginAttempts',
-    loginAttemptLockTimeField: 'loginAttemptLockTime',
+    usernameProperty: 'username',
+    passwordProperty: 'password',
     loginAttemptLimit: 5,
     loginAttemptLockDuration: 15, // minutes
     pbkdf2Iterations: 25000,
