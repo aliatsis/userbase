@@ -46,9 +46,8 @@ function isLoginAttemptLocked(user, loginAttempts, options) {
         if (loginAttemptLockTime) {
             var ms = options.loginAttemptLockDuration * 60000;
 
-            if (Date.now() < loginAttemptLockTime + ms) {
-                return true;
-            }
+            // should not be considered locked if it's past the lock duration
+            return Date.now() < loginAttemptLockTime + ms;
         }
 
         return loginAttempts >= options.loginAttemptLimit;
@@ -110,18 +109,7 @@ function authenticatePassword(user, password, options) {
 
                 return;
             } else {
-                if (hasLoginAttemptLimit(options)) {
-                    var newAttempts = db.get().getLoginAttempts(user) + 1;
-                    var changes = {
-                        loginAttempts: newAttempts
-                    };
-
-                    if (isLoginAttemptLocked(user, newAttempts, options)) {
-                        changes.loginAttemptLockTime = Date.now();
-                    }
-
-                    db.get().update(user, changes);
-                }
+                maybeSaveLoginAttempt(user, options);
 
                 reject({
                     result: false,
@@ -139,6 +127,8 @@ function authenticatePassword(user, password, options) {
 function authenticateUser(user, password, options) {
     return new Promise(function(resolve, reject) {
         if (isLoginAttemptLocked(user, db.get().getLoginAttempts(user), options)) {
+            maybeSaveLoginAttempt(user, options);
+
             return reject({
                 result: false,
                 info: {
@@ -232,6 +222,25 @@ function getHashAndSaltForPassword(password, options) {
             });
         });
     });
+}
+
+function maybeSaveLoginAttempt(user, options) {
+    if (hasLoginAttemptLimit(options)) {
+        var newAttempts = db.get().getLoginAttempts(user) + 1;
+        var changes = {
+            loginAttempts: newAttempts
+        };
+
+        if (isLoginAttemptLocked(user, newAttempts, options)) {
+            changes.loginAttemptLockTime = Date.now();
+        } else if (db.get().getLoginAttemptLockTime(user)) {
+            // if not locked but still has a value for lock time, reset it            
+            changes.loginAttempts = 1;
+            changes.loginAttemptLockTime = null;
+        }
+
+        db.get().update(user, changes);
+    }
 }
 
 /////////////////////////
