@@ -20,15 +20,19 @@ function login(options, req, res) {
 }
 
 function logout(options, req, res) {
-    req.logout();
+    db.get().update(req.user, {
+        lastLogout: Date.now()
+    }).then(function() {
+        req.logout();
 
-    db.get().update({
-        lastLogout: Data.now()
-    });
-
-    res.json({
-        "message": "User has successfully logged out!"
-    });
+        res.json({
+            "message": "User has successfully logged out!"
+        });
+    }, function() {
+        res.json({
+            "message": "Failed to log user out!"
+        });
+    })
 }
 
 function saveNewUser(bodyProps, options) {
