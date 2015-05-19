@@ -1,6 +1,6 @@
 {
   "name": "@anthonyl/user",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "A flexible and configurable Node Express API server for security conscious authentication and user account management",
   "main": "index.js",
   "scripts": {},
