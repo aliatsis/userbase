@@ -33,6 +33,18 @@ var dbAdaptorSchema = schema({
         type: 'function',
         message: 'dbAdaptor \'getHash\' function is required'
     },
+    getLastLogin: {
+        type: 'function',
+        message: 'dbAdaptor \'getLastLogin\' function is required'
+    },
+    getLastLogout: {
+        type: 'function',
+        message: 'dbAdaptor \'getLastLogout\' function is required'
+    },
+    getProfile: {
+        type: 'function',
+        message: 'dbAdaptor \'getProfile\' function is required'
+    },
     getLoginAttempts: {
         type: 'function',
         message: 'dbAdaptor \'getLoginAttempts\' function is required if \'loginAttemptLimit\' option is greater than 0'
@@ -48,6 +60,10 @@ var dbAdaptorSchema = schema({
     update: {
         type: 'function',
         message: 'dbAdaptor \'update\' function is required'
+    },
+    editProfile: {
+        type: 'function',
+        message: 'dbAdaptor \'editProfile\' function is required'
     }
 });
 

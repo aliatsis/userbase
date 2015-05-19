@@ -11,13 +11,12 @@ var db = require('../db');
 //        HELPERS        //
 ///////////////////////////
 
-function getUser(options, req, res) {
-    res.json(req.user);
+function getProfile(options, req, res) {
+    res.json(db.get().getProfile(req.user));
 }
 
 function login(options, req, res) {
-    // login authentication populates req.user with { token: XXX, user: { }}
-    res.json(req.user);
+    res.json(AuthController.serializeWithToken(req.user, options));
 }
 
 function logout(options, req, res) {
@@ -91,7 +90,7 @@ function init(dbAdaptor) {
 
 module.exports = {
     init: init,
-    getUser: getUser,
+    getProfile: getProfile,
     login: login,
     logout: logout,
     signup: signup

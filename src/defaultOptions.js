@@ -5,7 +5,8 @@ module.exports = {
     routes: {
         login: '/login',
         logout: '/logout',
-        signup: '/signup'
+        signup: '/signup',
+        profile: '/profile'
     },
     usernameProperty: 'username',
     passwordProperty: 'password',

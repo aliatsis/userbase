@@ -148,7 +148,7 @@ function localAuthenticate(options) {
         return db.get().findByUsername(username).then(function(user) {
             if (user) {
                 return authenticateUser(user, password, options).then(function() {
-                    done(null, serializeWithToken(user, options));
+                    done(null, user);
                 }, function(reason) {
                     done(reason.error, reason.result, reason.info);
                 });
@@ -167,7 +167,13 @@ function jwtAuthenticate(options) {
     return function(jwtPayload, done) {
         return db.get().findById(jwtPayload.sub).then(function(user) {
             if (user) {
-                done(null, db.get().serialize(user));
+                if (validatePayloadForUser(user, jwtPayload)) {
+                    done(null, user);
+                } else {
+                    done(null, false, {
+                        message: 'LogoutInvalidatedJWTError'
+                    });
+                }
             } else {
                 done(null, false, {
                     message: 'IncorrectOrDeletedPayloadSubjectError'
@@ -177,6 +183,21 @@ function jwtAuthenticate(options) {
             done(err, false);
         });
     };
+}
+
+function validatePayloadForUser(user, jwtPayload) {
+    if (user && jwtPayload) {
+        var lastLogout = db.get().getLastLogout(user);
+
+        if (lastLogout) {
+            return lastLogout < jwtPayload.iat;
+        } else {
+            // can't be invalid if hasn't logout yet
+            return true;
+        }
+    }
+
+    return false;
 }
 
 function createLocalStrategy(options) {
