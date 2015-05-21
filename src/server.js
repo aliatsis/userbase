@@ -6,7 +6,7 @@ var methodOverride = require('method-override');
 var errorMiddleware = require('ajl-express-error-middleware');
 var extend = require('extend');
 var log = require('bunyan').createLogger({
-    name: 'user: server'
+    name: 'userbase: server'
 });
 
 var db = require('./db');

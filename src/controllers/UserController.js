@@ -1,7 +1,7 @@
 var Promise = require("es6-promise").Promise;
 var extend = require('extend');
 var log = require('bunyan').createLogger({
-    name: 'user: UserController'
+    name: 'userbase: UserController'
 });
 
 var AuthController = require('./AuthController');

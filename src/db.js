@@ -1,5 +1,5 @@
 var log = require('bunyan').createLogger({
-    name: 'user: db'
+    name: 'userbase: db'
 });
 
 var validateDbAdaptor = require('./validators/validateDbAdaptor');
