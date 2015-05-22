@@ -15,6 +15,17 @@ function getProfile(options, req, res) {
     res.json(db.get().getProfile(req.user));
 }
 
+function updateProfile(options, req, res) {
+    db.get().updateProfile(req.user, req.body)
+        .then(function(user) {
+            res.json(db.get().getProfile(user));
+        }, function() {
+            res.json({
+                "message": "Failed to update user profile!"
+            });
+        });
+}
+
 function login(options, req, res) {
     res.json(AuthController.serializeWithToken(req.user, options));
 }
@@ -32,7 +43,7 @@ function logout(options, req, res) {
         res.json({
             "message": "Failed to log user out!"
         });
-    })
+    });
 }
 
 function saveNewUser(bodyProps, options) {
@@ -95,6 +106,7 @@ function init(dbAdaptor) {
 module.exports = {
     init: init,
     getProfile: getProfile,
+    updateProfile: updateProfile,
     login: login,
     logout: logout,
     signup: signup
