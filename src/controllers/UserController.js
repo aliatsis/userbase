@@ -6,19 +6,20 @@ var log = require('bunyan').createLogger({
 
 var AuthController = require('./AuthController');
 var db = require('../db');
+var messenger = require('../messenger');
 
 ///////////////////////////
 //        HELPERS        //
 ///////////////////////////
 
 function getProfile(options, req, res) {
-    res.json(db.get().getProfile(req.user));
+    res.json(db.adaptor.getProfile(req.user));
 }
 
 function updateProfile(options, req, res) {
-    db.get().updateProfile(req.user, req.body)
+    db.adaptor.updateProfile(req.user, req.body)
         .then(function(user) {
-            res.json(db.get().getProfile(user));
+            res.json(db.adaptor.getProfile(user));
         }, function() {
             res.json({
                 "message": "Failed to update user profile!"
@@ -31,7 +32,7 @@ function login(options, req, res) {
 }
 
 function logout(options, req, res) {
-    db.get().update(req.user, {
+    db.adaptor.update(req.user, {
         lastLogout: Date.now()
     }).then(function() {
         req.logout();
@@ -46,13 +47,15 @@ function logout(options, req, res) {
     });
 }
 
-function saveNewUser(bodyProps, options) {
-    var password = bodyProps[options.passwordProperty];
+function getPasswordProps(req, options) {
+    return AuthController.getHashAndSaltForPassword(req.body[options.passwordProperty], options);
+}
 
-    return AuthController.getHashAndSaltForPassword(password, options).then(function(hashAndSalt) {
-        var props = extend({}, bodyProps, hashAndSalt); // make copy to be safe
+function saveNewUser(req, options) {
+    return getPasswordProps(req, options).then(function(passwordProps) {
+        var props = extend({}, req.body, passwordProps); // make copy to be safe
 
-        return db.get().create(props);
+        return db.adaptor.create(props);
     });
 }
 
@@ -70,12 +73,12 @@ function signup(options, req, res, next) {
 
     log.info('Signing Up User:', username);
 
-    db.get().findByUsername(username).then(function(existingUser) {
+    db.adaptor.findByUsername(username).then(function(existingUser) {
         if (existingUser) {
             return next(new Error('ExistingUserError: a user already exists with the ' + options.usernameProperty + ' ' + username));
         }
 
-        saveNewUser(req.body, options).then(function(newUser) {
+        saveNewUser(req, options).then(function(newUser) {
             log.info('Signed Up User:', username);
             res.json(
                 AuthController.serializeWithToken(newUser, options)
@@ -91,12 +94,81 @@ function signup(options, req, res, next) {
     });
 }
 
-/////////////////////////
-//        INIT         //
-/////////////////////////
+function sendResetPasswordLink(user, options) {
+    var userId = db.adaptor.getId(user);
+    log.info('Generating reset password token for user:', userId);
+    return AuthController.generateResetPasswordToken(user, options).then(function(token) {
+        log.info('Sending reset password link for user:', userId);
+        return messenger.adaptor.sendResetPasswordLink(user, token);
+    }).then(function() {
+        log.info('Successfully sent reset password token for user:', userId);
+    }).catch(console.log.bind(console));
+}
 
-function init(dbAdaptor) {
+function forgotPassword(options, req, res, next) {
+    var username = req.body[options.usernameProperty];
+    var email = req.body[options.emailProperty];
 
+    if (!username || !email) {
+        return next(new Error('MissingUsernameOrEmailError: forgot password is missing a username or email in request property'));
+    }
+
+    var userPromise = username ? db.adaptor.findByUsername(username) : db.adaptor.findByEmail(email);
+
+    userPromise.then(function(user) {
+        if (user) {
+            return sendResetPasswordLink(user, options).then(function() {
+                res.json({
+                    message: 'Successfully sent password reset link to user!'
+                });
+            }).catch(function(err) {
+                console.log(err);
+                return next(err);
+            });
+        } else {
+            return next(null, false, {
+                message: 'UserDoesNotExistError'
+            });
+        }
+    }).catch(function(err) {
+        log.error('Error finding user for forgot password:', username || email, err);
+        return next(err);
+    });
+}
+
+function resetPassword(options, req, res, next) {
+    AuthController.getResetPasswordHashForToken(
+        req.params.token, options
+    ).then(function(resetPasswordHash) {
+        return db.adaptor.findByResetPasswordHash(resetPasswordHash);
+    }).then(function(user) {
+        if (!user) {
+            return next(null, false, {
+                message: 'UserDoesNotExistForResetPasswordTokenError'
+            });
+        }
+
+        var resetPasswordExpiration = db.adaptor.getResetPasswordExpiration(user);
+        if (Date.now() < resetPasswordExpiration) {
+            return getPasswordProps(req, options).then(function(passwordProps) {
+                var changes = extend(passwordProps, {
+                    resetPasswordHash: null,
+                    resetPasswordExpiration: null
+                });
+
+                return db.adaptor.update(user, changes).then(function() {
+                    res.json({
+                        message: "Successfully reset password!"
+                    });
+                });
+            });
+        } else {
+            return next(new Error('ExpiredResetPasswordTokenError'));
+        }
+    }).catch(function(err) {
+        console.log(err);
+        return next(err);
+    });
 }
 
 ///////////////////////////
@@ -104,10 +176,11 @@ function init(dbAdaptor) {
 ///////////////////////////
 
 module.exports = {
-    init: init,
     getProfile: getProfile,
     updateProfile: updateProfile,
     login: login,
     logout: logout,
-    signup: signup
+    signup: signup,
+    forgotPassword: forgotPassword,
+    resetPassword: resetPassword
 };

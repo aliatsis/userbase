@@ -16,6 +16,16 @@ var dbAdaptorSchema = schema({
         required: true,
         message: 'dbAdaptor \'findByUsername\' function is required'
     },
+    findByEmail: {
+        type: 'function',
+        required: true,
+        message: 'dbAdaptor \'findByEmail\' function is required'
+    },
+    findByResetPasswordHash: {
+        type: 'function',
+        required: true,
+        message: 'dbAdaptor \'findByResetPasswordHash\' function is required'
+    },
     serialize: {
         type: 'function',
         required: true,
@@ -41,6 +51,10 @@ var dbAdaptorSchema = schema({
         type: 'function',
         message: 'dbAdaptor \'getLastLogout\' function is required'
     },
+    getResetPasswordExpiration: {
+        type: 'function',
+        message: 'dbAdaptor \'getResetPasswordExpiration\' function is required'
+    },
     getProfile: {
         type: 'function',
         message: 'dbAdaptor \'getProfile\' function is required'
@@ -61,9 +75,9 @@ var dbAdaptorSchema = schema({
         type: 'function',
         message: 'dbAdaptor \'update\' function is required'
     },
-    editProfile: {
+    updateProfile: {
         type: 'function',
-        message: 'dbAdaptor \'editProfile\' function is required'
+        message: 'dbAdaptor \'updateProfile\' function is required'
     }
 });
 

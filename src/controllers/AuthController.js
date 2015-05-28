@@ -9,20 +9,19 @@ var scmp = require('scmp');
 
 var db = require('../db');
 
-var localAuthenticator;
-var jwtAuthenticator;
-
 ///////////////////////////
 //        HELPERS        //
 ///////////////////////////
 
 function authenticate(ignoredPaths, options) {
     var middleware = function(req, res) {
-        var authenticator = jwtAuthenticator;
+        var authenticator;
 
         // use local strategy for login request
         if (req.url.indexOf(options.routes.login) > -1) {
-            authenticator = localAuthenticator;
+            authenticator = getAuthenticator('local');
+        } else {
+            authenticator = getAuthenticator('jwt');
         }
 
         authenticator.apply(this, arguments);
@@ -41,7 +40,7 @@ function hasLoginAttemptLimit(options) {
 
 function isLoginAttemptLocked(user, loginAttempts, options) {
     if (hasLoginAttemptLimit(options)) {
-        var loginAttemptLockTime = db.get().getLoginAttemptLockTime(user);
+        var loginAttemptLockTime = db.adaptor.getLoginAttemptLockTime(user);
 
         if (loginAttemptLockTime) {
             var ms = options.loginAttemptLockDuration * 60000;
@@ -58,23 +57,59 @@ function isLoginAttemptLocked(user, loginAttempts, options) {
 
 function generateToken(user, options) {
     return jwt.sign({}, options.secretOrKey, {
-        subject: db.get().getId(user),
+        subject: db.adaptor.getId(user),
         expiresInSeconds: options.tokenExpiresInSeconds,
         expiresInMinutes: options.tokenExpiresInMinutes
+    });
+}
+
+function generateResetPasswordToken(user, options) {
+    return new Promise(function(resolve, reject) {
+        crypto.randomBytes(options.resetPasswordTokenLength, function(err, buffer) {
+            if (err) {
+                return reject(err);
+            }
+
+            var resetToken = buffer.toString('hex');
+
+            getResetPasswordHashForToken(resetToken, options).then(function(resetPasswordHash) {
+                db.adaptor.update(user, {
+                    resetPasswordHash: resetPasswordHash,
+                    resetPasswordExpiration: Date.now() + options.resetPasswordExpiration * 60000
+                }).then(function() {
+                    return resolve(resetToken);
+                }, reject).catch(console.log.bind(console));
+            }, reject).catch(console.log.bind(console));
+        });
+    });
+}
+
+function getResetPasswordHashForToken(resetToken, options) {
+    return new Promise(function(resolve, reject) {
+        crypto.pbkdf2(resetToken, 'test', options.pbkdf2Iterations, options.pbkdf2KeyLength, options.pbkdf2Algorithm,
+            function(err, hashRaw) {
+                if (err) {
+                    return reject(err);
+                }
+
+                var hash = new Buffer(hashRaw, 'binary').toString(options.encoding);
+
+                return resolve(hash);
+            });
     });
 }
 
 function serializeWithToken(user, options) {
     return {
         token: generateToken(user, options),
-        user: db.get().serialize(user)
+        user: db.adaptor.serialize(user)
     };
 }
 
 function authenticatePassword(user, password, options) {
     return new Promise(function(resolve, reject) {
 
-        var salt = db.get().getSalt(user);
+        var salt = db.adaptor.getSalt(user);
 
         if (!salt) {
             return reject({
@@ -85,7 +120,7 @@ function authenticatePassword(user, password, options) {
             });
         }
 
-        crypto.pbkdf2(password, salt, options.pbkdf2Iterations, options.pbkdf2KeyLength, function(err, hashRaw) {
+        crypto.pbkdf2(password, salt, options.pbkdf2Iterations, options.pbkdf2KeyLength, options.pbkdf2Algorithm, function(err, hashRaw) {
             if (err) {
                 reject({
                     error: err
@@ -96,9 +131,9 @@ function authenticatePassword(user, password, options) {
 
             var hash = new Buffer(hashRaw, 'binary').toString(options.encoding);
 
-            if (scmp(hash, db.get().getHash(user))) {
+            if (scmp(hash, db.adaptor.getHash(user))) {
                 if (hasLoginAttemptLimit(options)) {
-                    db.get().update(user, {
+                    db.adaptor.update(user, {
                         loginAttempts: 0,
                         lastLogin: Date.now(),
                         loginAttemptLockTime: null
@@ -126,7 +161,7 @@ function authenticatePassword(user, password, options) {
 
 function authenticateUser(user, password, options) {
     return new Promise(function(resolve, reject) {
-        if (isLoginAttemptLocked(user, db.get().getLoginAttempts(user), options)) {
+        if (isLoginAttemptLocked(user, db.adaptor.getLoginAttempts(user), options)) {
             maybeSaveLoginAttempt(user, options);
 
             return reject({
@@ -145,7 +180,7 @@ function authenticateUser(user, password, options) {
 
 function localAuthenticate(options) {
     return function(username, password, done) {
-        return db.get().findByUsername(username).then(function(user) {
+        return db.adaptor.findByUsername(username).then(function(user) {
             if (user) {
                 return authenticateUser(user, password, options).then(function() {
                     done(null, user);
@@ -165,7 +200,7 @@ function localAuthenticate(options) {
 
 function jwtAuthenticate(options) {
     return function(jwtPayload, done) {
-        return db.get().findById(jwtPayload.sub).then(function(user) {
+        return db.adaptor.findById(jwtPayload.sub).then(function(user) {
             if (user) {
                 if (validatePayloadForUser(user, jwtPayload)) {
                     done(null, user);
@@ -187,7 +222,7 @@ function jwtAuthenticate(options) {
 
 function validatePayloadForUser(user, jwtPayload) {
     if (user && jwtPayload) {
-        var lastLogout = db.get().getLastLogout(user);
+        var lastLogout = db.adaptor.getLastLogout(user);
 
         if (lastLogout) {
             return lastLogout < jwtPayload.iat;
@@ -229,7 +264,7 @@ function getHashAndSaltForPassword(password, options) {
 
             var salt = buf.toString(options.encoding);
 
-            crypto.pbkdf2(password, salt, options.pbkdf2Iterations, options.pbkdf2KeyLength, function(err, hashRaw) {
+            crypto.pbkdf2(password, salt, options.pbkdf2Iterations, options.pbkdf2KeyLength, options.pbkdf2Algorithm, function(err, hashRaw) {
                 if (err) {
                     reject(err);
                     return;
@@ -247,20 +282,20 @@ function getHashAndSaltForPassword(password, options) {
 
 function maybeSaveLoginAttempt(user, options) {
     if (hasLoginAttemptLimit(options)) {
-        var newAttempts = db.get().getLoginAttempts(user) + 1;
+        var newAttempts = db.adaptor.getLoginAttempts(user) + 1;
         var changes = {
             loginAttempts: newAttempts
         };
 
         if (isLoginAttemptLocked(user, newAttempts, options)) {
             changes.loginAttemptLockTime = Date.now();
-        } else if (db.get().getLoginAttemptLockTime(user)) {
+        } else if (db.adaptor.getLoginAttemptLockTime(user)) {
             // if not locked but still has a value for lock time, reset it            
             changes.loginAttempts = 1;
             changes.loginAttemptLockTime = null;
         }
 
-        db.get().update(user, changes);
+        db.adaptor.update(user, changes);
     }
 }
 
@@ -272,18 +307,16 @@ function init(app, options) {
     app.use(passport.initialize());
     passport.use(createLocalStrategy(options));
     passport.use(createJWTStrategy(options));
-
-    localAuthenticator = getAuthenticator('local');
-    jwtAuthenticator = getAuthenticator('jwt');
 }
 
 ///////////////////////////
 //        PUBLIC         //
 ///////////////////////////
 
-module.exports = {
-    init: init,
-    authenticate: authenticate,
-    serializeWithToken: serializeWithToken,
-    getHashAndSaltForPassword: getHashAndSaltForPassword
-};
+exports = module.exports = init;
+
+exports.authenticate = authenticate;
+exports.serializeWithToken = serializeWithToken;
+exports.getHashAndSaltForPassword = getHashAndSaltForPassword;
+exports.generateResetPasswordToken = generateResetPasswordToken;
+exports.getResetPasswordHashForToken = getResetPasswordHashForToken;

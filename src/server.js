@@ -10,6 +10,7 @@ var log = require('bunyan').createLogger({
 });
 
 var db = require('./db');
+var messenger = require('./messenger');
 var AuthController = require('./controllers/AuthController');
 var router = require('./router');
 var defaultOptions = require('./defaultOptions');
@@ -18,7 +19,7 @@ var defaultOptions = require('./defaultOptions');
 //        INIT         //
 /////////////////////////
 
-function init(app, dbAdaptor, options) {
+function init(app, options) {
     app.use(logger('dev'));
     app.use(bodyParser.json());
     app.use(bodyParser.urlencoded({
@@ -28,34 +29,42 @@ function init(app, dbAdaptor, options) {
     app.use(cookieParser());
 
     // configure athentication middleware
-    AuthController.init(app, options);
+    AuthController(app, options);
+}
 
-    // connect to db
-    db.connect(dbAdaptor).then(function() {
+function registerDbAdaptor(app, options, dbAdaptor) {
+    return db(dbAdaptor).then(function() {
         // register api routes on successful db connection
-        router.init(app, options);
+        router(app, options);
         log.info('Registered API routes');
 
         // error handler configuration after routers are registered
         errorMiddleware(app);
-    });
 
-    app.listen(options.port);
-    log.info('App listening on port', options.port);
+        app.listen(options.port);
+        log.info('App listening on port', options.port);
+    });
+}
+
+function registerMessageAdaptor(app, options, messageAdaptor) {
+    return messenger(messageAdaptor);
+}
+
+function createUserbaseApp(options) {
+    var app = express();
+    options = extend(true, defaultOptions, options);
+
+    init(app, options);
+
+    exports.addAuthenticatedRouter = router.addAuthenticatedRouter.bind(this, app, options);
+    exports.registerDbAdaptor = registerDbAdaptor.bind(this, app, options);
+    exports.registerMessageAdaptor = registerMessageAdaptor.bind(this, app, options);
+
+    return app;
 }
 
 ///////////////////////////
 //        EXPORTS        //
 ///////////////////////////
 
-module.exports = function(dbAdaptor, options) {
-    options = extend(true, defaultOptions, options);
-    app = express();
-
-    process.nextTick(init.bind(null, app, dbAdaptor, options));
-
-    return {
-        app: app,
-        addAuthenticatedRouter: router.addAuthenticatedRouter.bind(this, app, options)
-    };
-};
+exports = module.exports = createUserbaseApp;
