@@ -1,4 +1,3 @@
-var Promise = require("es6-promise").Promise;
 var extend = require('extend');
 var log = require('bunyan').createLogger({
     name: 'userbase: UserController'
@@ -137,18 +136,22 @@ function forgotPassword(options, req, res, next) {
 }
 
 function resetPassword(options, req, res, next) {
+    var password = req.body[options.passwordProperty];
+
+    if (!password) {
+        return next(new Error('MissingPasswordError: resetPassword missing password in request property ' + options.passwordProperty));
+    }
+
     AuthController.getResetPasswordHashForToken(
         req.params.token, options
     ).then(function(resetPasswordHash) {
         return db.adaptor.findByResetPasswordHash(resetPasswordHash);
     }).then(function(user) {
         if (!user) {
-            return next(null, false, {
-                message: 'UserDoesNotExistForResetPasswordTokenError'
-            });
+            return next(new Error('ExpiredResetPasswordTokenError'));
         }
 
-        var resetPasswordExpiration = db.adaptor.getResetPasswordExpiration(user);
+        var resetPasswordExpiration = +db.adaptor.getResetPasswordExpiration(user);
         if (Date.now() < resetPasswordExpiration) {
             return getPasswordProps(req, options).then(function(passwordProps) {
                 var changes = extend(passwordProps, {

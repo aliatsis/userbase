@@ -86,7 +86,7 @@ function generateResetPasswordToken(user, options) {
 
 function getResetPasswordHashForToken(resetToken, options) {
     return new Promise(function(resolve, reject) {
-        crypto.pbkdf2(resetToken, 'test', options.pbkdf2Iterations, options.pbkdf2KeyLength, options.pbkdf2Algorithm,
+        crypto.pbkdf2(resetToken, '', options.pbkdf2Iterations, options.pbkdf2KeyLength, options.pbkdf2Algorithm,
             function(err, hashRaw) {
                 if (err) {
                     return reject(err);
