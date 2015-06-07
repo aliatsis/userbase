@@ -26,11 +26,6 @@ var dbAdaptorSchema = schema({
         required: true,
         message: 'dbAdaptor \'findByResetPasswordHash\' function is required'
     },
-    serialize: {
-        type: 'function',
-        required: true,
-        message: 'dbAdaptor \'serialize\' function is required'
-    },
     getId: {
         type: 'function',
         message: 'dbAdaptor \'getId\' function is required'

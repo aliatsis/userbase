@@ -27,7 +27,7 @@ function updateProfile(options, req, res) {
 }
 
 function login(options, req, res) {
-    res.json(AuthController.serializeWithToken(req.user, options));
+    res.json(AuthController.generateToken(req.user, options));
 }
 
 function logout(options, req, res) {
@@ -80,7 +80,7 @@ function signup(options, req, res, next) {
         saveNewUser(req, options).then(function(newUser) {
             log.info('Signed Up User:', username);
             res.json(
-                AuthController.serializeWithToken(newUser, options)
+                AuthController.generateToken(newUser, options)
             );
         }, function(err) {
             log.error('Error saving new user during signup:', username, err);

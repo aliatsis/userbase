@@ -99,13 +99,6 @@ function getResetPasswordHashForToken(resetToken, options) {
     });
 }
 
-function serializeWithToken(user, options) {
-    return {
-        token: generateToken(user, options),
-        user: db.adaptor.serialize(user)
-    };
-}
-
 function authenticatePassword(user, password, options) {
     return new Promise(function(resolve, reject) {
 
@@ -316,7 +309,7 @@ function init(app, options) {
 exports = module.exports = init;
 
 exports.authenticate = authenticate;
-exports.serializeWithToken = serializeWithToken;
+exports.generateToken = generateToken;
 exports.getHashAndSaltForPassword = getHashAndSaltForPassword;
 exports.generateResetPasswordToken = generateResetPasswordToken;
 exports.getResetPasswordHashForToken = getResetPasswordHashForToken;
