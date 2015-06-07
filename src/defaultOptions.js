@@ -24,5 +24,7 @@ module.exports = {
     tokenExpiresInMinutes: 30,
     resetPasswordTokenLength: 32,
     resetPasswordExpiration: 15, // minutes
+    cors: false,
+    corsOptions: undefined,
     secretOrKey: 'secret'
 };

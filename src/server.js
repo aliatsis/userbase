@@ -4,6 +4,7 @@ var cookieParser = require('cookie-parser');
 var bodyParser = require('body-parser');
 var methodOverride = require('method-override');
 var errorMiddleware = require('ajl-express-error-middleware');
+var cors = require('cors');
 var extend = require('extend');
 var log = require('bunyan').createLogger({
     name: 'userbase: server'
@@ -27,6 +28,10 @@ function init(app, options) {
     }));
     app.use(methodOverride());
     app.use(cookieParser());
+
+    if (options.cors) {
+        app.use(cors(options.corsOptions));
+    }
 
     // configure athentication middleware
     AuthController(app, options);
