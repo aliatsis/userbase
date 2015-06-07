@@ -15,6 +15,7 @@ var messenger = require('./messenger');
 var AuthController = require('./controllers/AuthController');
 var router = require('./router');
 var defaultOptions = require('./defaultOptions');
+var hooks = require('./hooks');
 
 /////////////////////////
 //        INIT         //
@@ -64,6 +65,7 @@ function createUserbaseApp(options) {
     exports.addAuthenticatedRouter = router.addAuthenticatedRouter.bind(this, app, options);
     exports.registerDbAdaptor = registerDbAdaptor.bind(this, app, options);
     exports.registerMessageAdaptor = registerMessageAdaptor.bind(this, app, options);
+    exports.hooks = hooks;
 
     return app;
 }

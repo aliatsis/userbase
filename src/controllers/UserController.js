@@ -6,6 +6,7 @@ var log = require('bunyan').createLogger({
 var AuthController = require('./AuthController');
 var db = require('../db');
 var messenger = require('../messenger');
+var hooks = require('../hooks');
 
 ///////////////////////////
 //        HELPERS        //
@@ -27,7 +28,9 @@ function updateProfile(options, req, res) {
 }
 
 function login(options, req, res) {
-    res.json(AuthController.generateToken(req.user, options));
+    hooks.trigger('login', req, res, req.user).then(function() {
+        res.json(AuthController.generateToken(req.user, options));
+    });
 }
 
 function logout(options, req, res) {
@@ -78,6 +81,10 @@ function signup(options, req, res, next) {
         }
 
         saveNewUser(req, options).then(function(newUser) {
+            return hooks.trigger('signup', req, res, newUser).then(function() {
+                return newUser;
+            });
+        }).then(function(newUser) {
             log.info('Signed Up User:', username);
             res.json(
                 AuthController.generateToken(newUser, options)
