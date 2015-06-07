@@ -28,8 +28,10 @@ function updateProfile(options, req, res) {
 }
 
 function login(options, req, res) {
-    hooks.trigger('login', req, res, req.user).then(function() {
-        res.json(AuthController.generateToken(req.user, options));
+    var token = AuthController.generateToken(req.user, options);
+
+    hooks.trigger('login', req, res, req.user, token).then(function() {
+        res.json(token);
     });
 }
 
@@ -81,14 +83,14 @@ function signup(options, req, res, next) {
         }
 
         saveNewUser(req, options).then(function(newUser) {
-            return hooks.trigger('signup', req, res, newUser).then(function() {
-                return newUser;
+            var token = AuthController.generateToken(newUser, options);
+
+            return hooks.trigger('signup', req, res, newUser, token).then(function() {
+                return token;
             });
-        }).then(function(newUser) {
+        }).then(function(token) {
             log.info('Signed Up User:', username);
-            res.json(
-                AuthController.generateToken(newUser, options)
-            );
+            res.json(token);
         }, function(err) {
             log.error('Error saving new user during signup:', username, err);
             return next(err);
