@@ -1,16 +1,11 @@
 var AuthController = require('../controllers/AuthController');
 var UserRouter = require('./UserRouter');
-var cors = require('cors');
 
 ///////////////////////////
 //        HELPERS        //
 ///////////////////////////
 
 function addAuthenticatedRouter(app, options, path, router, unauthenticatePaths) {
-    if (options.cors) {
-        router.use(cors(options.corsOptions));
-    }
-
     app.use(options.basePath + path, AuthController.authenticate(unauthenticatePaths, options), router);
 }
 
