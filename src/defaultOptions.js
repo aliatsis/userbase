@@ -26,5 +26,6 @@ module.exports = {
     resetPasswordExpiration: 15, // minutes
     cors: false,
     corsOptions: undefined,
+    apiEnvelope: undefined,
     secretOrKey: 'secret'
 };

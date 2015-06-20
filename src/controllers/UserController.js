@@ -12,42 +12,42 @@ var hooks = require('../hooks');
 //        HELPERS        //
 ///////////////////////////
 
-function getProfile(options, req, res) {
-    res.json(db.adaptor.getProfile(req.user));
+function sendReponse(options, req, res, data) {
+    if (typeof options.apiEnvelope === 'function') {
+        data = options.apiEnvelope(req, res, data);
+    }
+
+    res.json(data);
 }
 
-function updateProfile(options, req, res) {
-    db.adaptor.updateProfile(req.user, req.body)
-        .then(function(user) {
-            res.json(db.adaptor.getProfile(user));
-        }, function() {
-            res.json({
-                "message": "Failed to update user profile!"
-            });
-        });
+function getProfile(options, req, res) {
+    sendReponse(options, req, res, db.adaptor.getProfile(req.user));
+}
+
+function updateProfile(options, req, res, next) {
+    db.adaptor.updateProfile(req.user, req.body).then(function(user) {
+        sendReponse(options, req, res, db.adaptor.getProfile(user));
+    }, function(err) {
+        return next(err);
+    });
 }
 
 function login(options, req, res) {
     var token = AuthController.generateToken(req.user, options);
 
     hooks.trigger('login', req, res, req.user, token).then(function() {
-        res.json(token);
+        sendReponse(options, req, res, token);
     });
 }
 
-function logout(options, req, res) {
+function logout(options, req, res, next) {
     db.adaptor.update(req.user, {
         lastLogout: Date.now()
     }).then(function() {
         req.logout();
-
-        res.json({
-            "message": "User has successfully logged out!"
-        });
-    }, function() {
-        res.json({
-            "message": "Failed to log user out!"
-        });
+        sendReponse(options, req, res, 'User has successfully logged out!');
+    }, function(err) {
+        return next(err);
     });
 }
 
@@ -90,7 +90,7 @@ function signup(options, req, res, next) {
             });
         }).then(function(token) {
             log.info('Signed Up User:', username);
-            res.json(token);
+            sendReponse(options, req, res, token);
         }, function(err) {
             log.error('Error saving new user during signup:', username, err);
             return next(err);
@@ -126,9 +126,7 @@ function forgotPassword(options, req, res, next) {
     userPromise.then(function(user) {
         if (user) {
             return sendResetPasswordLink(user, options).then(function() {
-                res.json({
-                    message: 'Successfully sent password reset link to user!'
-                });
+                sendReponse(options, req, res, 'Successfully sent password reset link to user!');
             }).catch(function(err) {
                 console.log(err);
                 return next(err);
@@ -169,9 +167,7 @@ function resetPassword(options, req, res, next) {
                 });
 
                 return db.adaptor.update(user, changes).then(function() {
-                    res.json({
-                        message: "Successfully reset password!"
-                    });
+                    sendReponse(options, req, res, 'Successfully reset password!');
                 });
             });
         } else {
