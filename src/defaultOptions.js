@@ -1,6 +1,6 @@
 module.exports = {
     port: process.env.PORT || 8080,
-    basePath: '/api',
+    basePath: '/',
     userPath: '/user',
     routes: {
         login: '/login',
