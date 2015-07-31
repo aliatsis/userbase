@@ -27,7 +27,7 @@ function addAuthenticatedRouter(app, options, path, router, unauthenticatePaths)
 
 function init(app, options) {
     try {
-        addAuthenticatedRouter(app, options, options.userPath, UserRouter(options), getUnauthenticatedUserPaths(options));
+        addAuthenticatedRouter(app, options, options.userPath, UserRouter(options));
     } catch (e) {
         console.error(e);
     }
