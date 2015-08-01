@@ -218,7 +218,8 @@ function validatePayloadForUser(user, jwtPayload) {
         var lastLogout = db.adaptor.getLastLogout(user);
 
         if (lastLogout) {
-            return lastLogout < jwtPayload.iat;
+            // iat is in seconds
+            return Math.floor(lastLogout / 1000) < jwtPayload.iat;
         } else {
             // can't be invalid if hasn't logout yet
             return true;
