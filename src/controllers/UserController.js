@@ -6,7 +6,7 @@ var log = require('bunyan').createLogger({
 var AuthController = require('./AuthController');
 var db = require('../db');
 var messenger = require('../messenger');
-var hooks = require('../hooks');
+var emitter = require('../emitter');
 
 ///////////////////////////
 //        HELPERS        //
@@ -35,9 +35,9 @@ function updateProfile(options, req, res, next) {
 function login(options, req, res) {
     var token = AuthController.generateToken(req.user, options);
 
-    hooks.trigger('login', req, res, req.user, token).then(function() {
-        sendReponse(options, req, res, token);
-    });
+    emitter.on('login', function(rq, rs, data) {
+        sendReponse(options, rq, rs, data);
+    }).emit('login', req, res, token);
 }
 
 function logout(options, req, res, next) {
@@ -83,14 +83,14 @@ function signup(options, req, res, next) {
         }
 
         saveNewUser(req, options).then(function(newUser) {
-            var token = AuthController.generateToken(newUser, options);
-
-            return hooks.trigger('signup', req, res, newUser, token).then(function() {
-                return token;
-            });
-        }).then(function(token) {
             log.info('Signed Up User:', username);
-            sendReponse(options, req, res, token);
+
+            var token = AuthController.generateToken(newUser, options);
+            req.user = newUser;
+
+            emitter.on('signup', function(rq, rs, data) {
+                sendReponse(options, rq, rs, data);
+            }).emit('signup', req, res, token);
         }, function(err) {
             log.error('Error saving new user during signup:', username, err);
             return next(err);
