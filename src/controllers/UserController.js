@@ -12,7 +12,7 @@ var emitter = require('../emitter');
 //        HELPERS        //
 ///////////////////////////
 
-function sendReponse(options, req, res, data) {
+function sendResponse(options, req, res, data) {
     if (typeof options.apiEnvelope === 'function') {
         data = options.apiEnvelope(req, res, data);
     }
@@ -21,23 +21,23 @@ function sendReponse(options, req, res, data) {
 }
 
 function getProfile(options, req, res) {
-    sendReponse(options, req, res, db.adaptor.getProfile(req.user));
+    sendResponse(options, req, res, db.adaptor.getProfile(req.user));
 }
 
 function updateProfile(options, req, res, next) {
     db.adaptor.updateProfile(req.user, req.body).then(function(user) {
-        sendReponse(options, req, res, db.adaptor.getProfile(user));
+        sendResponse(options, req, res, db.adaptor.getProfile(user));
     }, function(err) {
         return next(err);
     });
 }
 
 function login(options, req, res) {
-    var token = AuthController.generateToken(req.user, options);
-
-    emitter.on('login', function(rq, rs, data) {
-        sendReponse(options, rq, rs, data);
-    }).emit('login', req, res, token);
+    AuthController.generateToken(req, res, options).then(function(token) {
+        emitter.on('login', function(rq, rs, data) {
+            sendResponse(options, rq, rs, data);
+        }).emit('login', req, res, token);
+    });
 }
 
 function logout(options, req, res, next) {
@@ -45,7 +45,7 @@ function logout(options, req, res, next) {
         lastLogout: Date.now()
     }).then(function() {
         req.logout();
-        sendReponse(options, req, res, 'User has successfully logged out!');
+        sendResponse(options, req, res, 'User has successfully logged out!');
     }, function(err) {
         return next(err);
     });
@@ -84,12 +84,12 @@ function signup(options, req, res, next) {
 
         saveNewUser(req, options).then(function(newUser) {
             log.info('Signed Up User:', username);
-
-            var token = AuthController.generateToken(newUser, options);
             req.user = newUser;
 
+            return AuthController.generateToken(req, res, options);
+        }).then(function(token) {
             emitter.on('signup', function(rq, rs, data) {
-                sendReponse(options, rq, rs, data);
+                sendResponse(options, rq, rs, data);
             }).emit('signup', req, res, token);
         }, function(err) {
             log.error('Error saving new user during signup:', username, err);
@@ -126,7 +126,7 @@ function forgotPassword(options, req, res, next) {
     userPromise.then(function(user) {
         if (user) {
             return sendResetPasswordLink(user, options).then(function() {
-                sendReponse(options, req, res, 'Successfully sent password reset link to user!');
+                sendResponse(options, req, res, 'Successfully sent password reset link to user!');
             }).catch(function(err) {
                 console.log(err);
                 return next(err);
@@ -167,7 +167,7 @@ function resetPassword(options, req, res, next) {
                 });
 
                 return db.adaptor.update(user, changes).then(function() {
-                    sendReponse(options, req, res, 'Successfully reset password!');
+                    sendResponse(options, req, res, 'Successfully reset password!');
                 });
             });
         } else {

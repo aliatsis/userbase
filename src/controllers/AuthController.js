@@ -1,12 +1,13 @@
 var passport = require('passport');
 var LocalStrategy = require('passport-local').Strategy;
 var JwtStrategy = require('passport-jwt').Strategy;
-var Promise = require("es6-promise").Promise;
+var Promise = require('es6-promise').Promise;
 var unless = require('express-unless');
 var crypto = require('crypto');
 var jwt = require('jsonwebtoken');
 var scmp = require('scmp');
 
+var emitter = require('../emitter');
 var db = require('../db');
 
 ///////////////////////////
@@ -55,11 +56,15 @@ function isLoginAttemptLocked(user, loginAttempts, options) {
     return false;
 }
 
-function generateToken(user, options) {
-    return jwt.sign({}, options.secretOrKey, {
-        subject: db.adaptor.getId(user),
-        expiresInSeconds: options.tokenExpiresInSeconds,
-        expiresInMinutes: options.tokenExpiresInMinutes
+function generateToken(req, res, options) {
+    return new Promise(function(resolve) {
+        emitter.on('jwt-payload', function(rq, rs, payload) {
+            resolve(jwt.sign({}, options.secretOrKey, payload));
+        }).emit('jwt-payload', req, res, {
+            subject: db.adaptor.getId(req.user),
+            expiresInSeconds: options.tokenExpiresInSeconds,
+            expiresInMinutes: options.tokenExpiresInMinutes
+        });
     });
 }
 
@@ -130,42 +135,50 @@ function authenticatePassword(user, password, options) {
                         loginAttempts: 0,
                         lastLogin: Date.now(),
                         loginAttemptLockTime: null
-                    });
+                    }).then(resolve, resolve);
+                } else {
+                    return resolve();
                 }
-
-                resolve();
-
-                return;
             } else {
-                maybeSaveLoginAttempt(user, options);
-
-                reject({
-                    result: false,
-                    info: {
-                        message: 'IncorrectPasswordError'
-                    }
+                maybeSaveLoginAttempt(user, options).then(function() {
+                    reject(getPasswordErrorData());
+                }, function() {
+                    reject(getPasswordErrorData());
                 });
-
-                return;
             }
         });
     });
 }
 
+function getPasswordErrorData() {
+    return {
+        result: false,
+        info: {
+            message: 'IncorrectPasswordError'
+        }
+    };
+}
+
+function getLoginAttemptLockedErrorData() {
+    return {
+        result: false,
+        info: {
+            message: 'LoginAttemptLockedError'
+        }
+    };
+}
+
 function authenticateUser(user, password, options) {
     return new Promise(function(resolve, reject) {
         if (isLoginAttemptLocked(user, db.adaptor.getLoginAttempts(user), options)) {
-            maybeSaveLoginAttempt(user, options);
-
-            return reject({
-                result: false,
-                info: {
-                    message: 'LoginAttemptLockedError'
-                }
+            maybeSaveLoginAttempt(user, options).then(function() {
+                reject(getLoginAttemptLockedErrorData());
+            }, function() {
+                reject(getLoginAttemptLockedErrorData());
             });
+        } else {
+            resolve();
         }
-
-        resolve();
     }).then(
         authenticatePassword.bind(null, user, password, options)
     );
@@ -284,12 +297,14 @@ function maybeSaveLoginAttempt(user, options) {
         if (isLoginAttemptLocked(user, newAttempts, options)) {
             changes.loginAttemptLockTime = Date.now();
         } else if (db.adaptor.getLoginAttemptLockTime(user)) {
-            // if not locked but still has a value for lock time, reset it            
+            // if not locked but still has a value for lock time, reset it
             changes.loginAttempts = 1;
             changes.loginAttemptLockTime = null;
         }
 
-        db.adaptor.update(user, changes);
+        return db.adaptor.update(user, changes);
+    } else {
+        return Promise.resolve();
     }
 }
 
