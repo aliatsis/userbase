@@ -7,7 +7,9 @@ var crypto = require('crypto');
 var jwt = require('jsonwebtoken');
 var scmp = require('scmp');
 
+var log = require('../logger')('AuthController');
 var emitter = require('../emitter');
+var errors = require('../errors');
 var db = require('../db');
 
 ///////////////////////////
@@ -15,297 +17,310 @@ var db = require('../db');
 ///////////////////////////
 
 function authenticate(ignoredPaths, options) {
-    var middleware = function(req, res) {
-        var authenticator;
+  var middleware = function(req) {
+    var authenticator;
 
-        // use local strategy for login request
-        if (req.url.indexOf(options.routes.login) > -1) {
-            authenticator = getAuthenticator('local');
-        } else {
-            authenticator = getAuthenticator('jwt');
-        }
+    // use local strategy for login request
+    if (req.url.indexOf(options.routes.login) > -1) {
+      authenticator = getAuthenticator('local');
+    } else {
+      authenticator = getAuthenticator('jwt');
+    }
 
-        authenticator.apply(this, arguments);
-    };
+    authenticator.apply(this, arguments);
+  };
 
-    middleware.unless = unless;
+  middleware.unless = unless;
 
-    return middleware.unless({
-        path: ignoredPaths
-    });
+  return middleware.unless({
+    path: ignoredPaths
+  });
 }
 
 function hasLoginAttemptLimit(options) {
-    return options.loginAttemptLimit > 0;
+  return options.loginAttemptLimit > 0;
 }
 
 function isLoginAttemptLocked(user, loginAttempts, options) {
-    if (hasLoginAttemptLimit(options)) {
-        var loginAttemptLockTime = db.adaptor.getLoginAttemptLockTime(user);
+  if (hasLoginAttemptLimit(options)) {
+    var loginAttemptLockTime = db.adaptor.getLoginAttemptLockTime(user);
 
-        if (loginAttemptLockTime) {
-            var ms = options.loginAttemptLockDuration * 60000;
+    if (loginAttemptLockTime) {
+      var ms = options.loginAttemptLockDuration * 60000;
 
-            // should not be considered locked if it's past the lock duration
-            return Date.now() < loginAttemptLockTime + ms;
-        }
-
-        return loginAttempts >= options.loginAttemptLimit;
+      // should not be considered locked if it's past the lock duration
+      return Date.now() < loginAttemptLockTime + ms;
     }
 
-    return false;
+    return loginAttempts >= options.loginAttemptLimit;
+  }
+
+  return false;
 }
 
 function generateToken(req, res, options) {
-    return new Promise(function(resolve) {
-        emitter.on('jwt-payload', function(rq, rs, payload) {
-            resolve(jwt.sign({}, options.secretOrKey, payload));
-        }).emit('jwt-payload', req, res, {
-            subject: db.adaptor.getId(req.user),
-            expiresInSeconds: options.tokenExpiresInSeconds,
-            expiresInMinutes: options.tokenExpiresInMinutes
-        });
+  return new Promise(function(resolve) {
+    emitter.once('jwt-payload', function(rq, rs, payload) {
+      resolve(jwt.sign({}, options.secretOrKey, payload));
+    }).emit('jwt-payload', req, res, {
+      subject: db.adaptor.getId(req.user),
+      expiresInSeconds: options.tokenExpiresInSeconds,
+      expiresInMinutes: options.tokenExpiresInMinutes
     });
+  });
 }
 
 function generateResetPasswordToken(user, options) {
-    return new Promise(function(resolve, reject) {
-        crypto.randomBytes(options.resetPasswordTokenLength, function(err, buffer) {
-            if (err) {
-                return reject(err);
-            }
+  return new Promise(function(resolve, reject) {
+    crypto.randomBytes(options.resetPasswordTokenLength, function(err, buffer) {
+      if (err) {
+        return reject(err);
+      }
 
-            var resetToken = buffer.toString('hex');
+      var resetToken = buffer.toString('hex');
 
-            getResetPasswordHashForToken(resetToken, options).then(function(resetPasswordHash) {
-                db.adaptor.update(user, {
-                    resetPasswordHash: resetPasswordHash,
-                    resetPasswordExpiration: Date.now() + options.resetPasswordExpiration * 60000
-                }).then(function() {
-                    return resolve(resetToken);
-                }, reject).catch(console.log.bind(console));
-            }, reject).catch(console.log.bind(console));
+      getResetPasswordHashForToken(resetToken, options).then(function(resetPasswordHash) {
+        return db.adaptor.update(user, {
+          resetPasswordHash: resetPasswordHash,
+          resetPasswordExpiration: Date.now() + options.resetPasswordExpiration * 60000
         });
+      }).then(function() {
+        resolve(resetToken);
+      }).catch(reject);
     });
+  });
 }
 
 function getResetPasswordHashForToken(resetToken, options) {
-    return new Promise(function(resolve, reject) {
-        crypto.pbkdf2(resetToken, '', options.pbkdf2Iterations, options.pbkdf2KeyLength, options.pbkdf2Algorithm,
-            function(err, hashRaw) {
-                if (err) {
-                    return reject(err);
-                }
-
-                var hash = new Buffer(hashRaw, 'binary').toString(options.encoding);
-
-                return resolve(hash);
-            });
-    });
-}
-
-function authenticatePassword(user, password, options) {
-    return new Promise(function(resolve, reject) {
-
-        var salt = db.adaptor.getSalt(user);
-
-        if (!salt) {
-            return reject({
-                result: false,
-                info: {
-                    message: 'NoSaltValueStoredError'
-                }
-            });
+  return new Promise(function(resolve, reject) {
+    crypto.pbkdf2(resetToken, '', options.pbkdf2Iterations, options.pbkdf2KeyLength, options.pbkdf2Algorithm,
+      function(err, hashRaw) {
+        if (err) {
+          return reject(err);
         }
 
-        crypto.pbkdf2(password, salt, options.pbkdf2Iterations, options.pbkdf2KeyLength, options.pbkdf2Algorithm, function(err, hashRaw) {
-            if (err) {
-                reject({
-                    error: err
-                });
+        var hash = new Buffer(hashRaw, 'binary').toString(options.encoding);
 
-                return;
-            }
-
-            var hash = new Buffer(hashRaw, 'binary').toString(options.encoding);
-
-            if (scmp(hash, db.adaptor.getHash(user))) {
-                if (hasLoginAttemptLimit(options)) {
-                    db.adaptor.update(user, {
-                        loginAttempts: 0,
-                        lastLogin: Date.now(),
-                        loginAttemptLockTime: null
-                    }).then(resolve, resolve);
-                } else {
-                    return resolve();
-                }
-            } else {
-                maybeSaveLoginAttempt(user, options).then(function() {
-                    reject(getPasswordErrorData());
-                }, function() {
-                    reject(getPasswordErrorData());
-                });
-            }
-        });
-    });
+        return resolve(hash);
+      });
+  });
 }
 
-function getPasswordErrorData() {
-    return {
-        result: false,
-        info: {
-            message: 'IncorrectPasswordError'
-        }
-    };
-}
+function authenticatePassword(user, password, options, contextLog) {
+  return new Promise(function(resolve, reject) {
 
-function getLoginAttemptLockedErrorData() {
-    return {
-        result: false,
-        info: {
-            message: 'LoginAttemptLockedError'
-        }
-    };
-}
+    var salt = db.adaptor.getSalt(user);
 
-function authenticateUser(user, password, options) {
-    return new Promise(function(resolve, reject) {
-        if (isLoginAttemptLocked(user, db.adaptor.getLoginAttempts(user), options)) {
-            maybeSaveLoginAttempt(user, options).then(function() {
-                reject(getLoginAttemptLockedErrorData());
-            }, function() {
-                reject(getLoginAttemptLockedErrorData());
-            });
+    if (!salt) {
+      return reject(new errors.NoSaltError());
+    }
+
+    crypto.pbkdf2(password, salt, options.pbkdf2Iterations, options.pbkdf2KeyLength, options.pbkdf2Algorithm, function(err, hashRaw) {
+      if (err) {
+        return reject(err);
+      }
+
+      var hash = new Buffer(hashRaw, 'binary').toString(options.encoding);
+
+      if (scmp(hash, db.adaptor.getHash(user))) {
+        if (hasLoginAttemptLimit(options)) {
+          db.adaptor.update(user, {
+            loginAttempts: 0,
+            lastLogin: Date.now(),
+            loginAttemptLockTime: null
+          }).then(resolve).catch(resolve);
         } else {
-            resolve();
+          return resolve();
         }
-    }).then(
-        authenticatePassword.bind(null, user, password, options)
-    );
+      } else {
+        var credsErr = new errors.InvalidCredentialsError();
+
+        maybeSaveLoginAttempt(user, options, contextLog).then(function() {
+          reject(credsErr);
+        }).catch(function() {
+          reject(credsErr);
+        });
+      }
+    });
+  });
+}
+
+function authenticateUser(user, password, options, contextLog) {
+  if (isLoginAttemptLocked(user, db.adaptor.getLoginAttempts(user), options)) {
+    var lockedRejection = Promise.reject(new errors.LockedAccountError());
+
+    contextLog.info('Login attempt locked');
+
+    return maybeSaveLoginAttempt(user, options, contextLog).then(function() {
+      return lockedRejection;
+    }).catch(function() {
+      return lockedRejection;
+    });
+  } else {
+    return authenticatePassword(user, password, options, contextLog);
+  }
 }
 
 function localAuthenticate(options) {
-    return function(username, password, done) {
-        return db.adaptor.findByUsername(username).then(function(user) {
-            if (user) {
-                return authenticateUser(user, password, options).then(function() {
-                    done(null, user);
-                }, function(reason) {
-                    done(reason.error, reason.result, reason.info);
-                });
-            } else {
-                return done(null, false, {
-                    message: 'IncorrectUsernameError'
-                });
-            }
-        }, function(err) {
-            return done(err);
+  return function(username, password, done) {
+    var preAuthLog = log.child({
+      username: username,
+      strategy: 'local'
+    });
+
+    db.adaptor.findByUsername(username).then(function(user) {
+      if (user) {
+        var contextLog = log.child({
+          user: user._id,
+          strategy: 'local'
         });
-    };
+
+        contextLog.info('Authenticating user...');
+
+        authenticateUser(user, password, options, contextLog).then(function() {
+          contextLog.info('Successfully authenticated user');
+          done(null, user);
+        }, function(err) {
+          contextLog.warn(err);
+          done(null, false, options.apiEnvelope(null, err));
+        }).catch(function(err) {
+          contextLog.error(err);
+          done(err);
+        });
+      } else {
+        var unknownUsernameErr = new errors.UnknownUsernameError(null, username);
+        var unknownUsernameData = options.apiEnvelope(null, unknownUsernameErr);
+
+        preAuthLog.warn(unknownUsernameErr);
+        done(null, false, unknownUsernameData);
+      }
+    }).catch(function(err) {
+      preAuthLog.error(err);
+      done(err);
+    });
+  };
 }
 
 function jwtAuthenticate(options) {
-    return function(jwtPayload, done) {
-        return db.adaptor.findById(jwtPayload.sub).then(function(user) {
-            if (user) {
-                if (validatePayloadForUser(user, jwtPayload)) {
-                    done(null, user);
-                } else {
-                    done(null, false, {
-                        message: 'LogoutInvalidatedJWTError'
-                    });
-                }
-            } else {
-                done(null, false, {
-                    message: 'IncorrectOrDeletedPayloadSubjectError'
-                });
-            }
-        }, function(err) {
-            done(err, false);
+  return function(jwtPayload, done) {
+    var preAuthLog = log.child({
+      user: jwtPayload.sub,
+      strategy: 'jwt'
+    });
+
+    db.adaptor.findById(jwtPayload.sub).then(function(user) {
+      if (user) {
+        var contextLog = log.child({
+          user: user._id,
+          strategy: 'jwt'
         });
-    };
+
+        contextLog.info('Authenticating user...');
+
+        validatePayloadForUser(user, jwtPayload).then(function() {
+          contextLog.info('Successfully authenticated user');
+          done(null, user);
+        }, function(err) {
+          contextLog.warn(err);
+          done(null, false, options.apiEnvelope(null, err));
+        });
+      } else {
+        var unknownSubjetErr = new errors.UnknownJWTSubjectError(null, jwtPayload.sub);
+        var unknownSubjectData = options.apiEnvelope(null, unknownSubjetErr);
+
+        preAuthLog.warn(unknownSubjetErr);
+        done(null, false, unknownSubjectData);
+      }
+    }).catch(function(err) {
+      preAuthLog.error(err);
+      done(err);
+    });
+  };
 }
 
 function validatePayloadForUser(user, jwtPayload) {
-    if (user && jwtPayload) {
-        var lastLogout = db.adaptor.getLastLogout(user);
+  if (jwtPayload) {
+    var lastLogout = db.adaptor.getLastLogout(user);
 
-        if (lastLogout) {
-            // iat is in seconds
-            return Math.floor(lastLogout / 1000) < jwtPayload.iat;
-        } else {
-            // can't be invalid if hasn't logout yet
-            return true;
-        }
+    // iat is in seconds
+    if (lastLogout && Math.floor(lastLogout / 1000) >= jwtPayload.iat) {
+      return Promise.reject(
+        new errors.LogoutExpiredJWTError(null, user._id)
+      );
+    } else {
+      return Promise.resolve(); // can't be invalid if hasn't logout yet
     }
+  }
 
-    return false;
+  return Promise.reject(
+    new errors.InvalidJWTPayloadError(null, user._id, jwtPayload)
+  );
 }
 
 function createLocalStrategy(options) {
-    return new LocalStrategy({
-        usernameField: options.usernameProperty,
-        passwordField: options.passwordProperty
-    }, localAuthenticate(options));
+  return new LocalStrategy({
+    usernameField: options.usernameProperty,
+    passwordField: options.passwordProperty
+  }, localAuthenticate(options));
 }
 
 function createJWTStrategy(options) {
-    return new JwtStrategy({
-        secretOrKey: options.secretOrKey
-    }, jwtAuthenticate(options));
+  return new JwtStrategy({
+    secretOrKey: options.secretOrKey
+  }, jwtAuthenticate(options));
 }
 
 function getAuthenticator(strategy) {
-    return passport.authenticate(strategy, {
-        session: false
-    });
+  return passport.authenticate(strategy, {
+    session: false
+  });
 }
 
 function getHashAndSaltForPassword(password, options) {
-    return new Promise(function(resolve, reject) {
-        crypto.randomBytes(options.saltLength, function(err, buf) {
-            if (err) {
-                reject(err);
-                return;
-            }
+  return new Promise(function(resolve, reject) {
+    crypto.randomBytes(options.saltLength, function(err, buf) {
+      if (err) {
+        return reject(err);
+      }
 
-            var salt = buf.toString(options.encoding);
+      var salt = buf.toString(options.encoding);
 
-            crypto.pbkdf2(password, salt, options.pbkdf2Iterations, options.pbkdf2KeyLength, options.pbkdf2Algorithm, function(err, hashRaw) {
-                if (err) {
-                    reject(err);
-                    return;
-                }
-
-                resolve({
-                    hash: new Buffer(hashRaw, 'binary').toString(options.encoding),
-                    salt: salt
-                });
-                return;
-            });
-        });
-    });
-}
-
-function maybeSaveLoginAttempt(user, options) {
-    if (hasLoginAttemptLimit(options)) {
-        var newAttempts = db.adaptor.getLoginAttempts(user) + 1;
-        var changes = {
-            loginAttempts: newAttempts
-        };
-
-        if (isLoginAttemptLocked(user, newAttempts, options)) {
-            changes.loginAttemptLockTime = Date.now();
-        } else if (db.adaptor.getLoginAttemptLockTime(user)) {
-            // if not locked but still has a value for lock time, reset it
-            changes.loginAttempts = 1;
-            changes.loginAttemptLockTime = null;
+      crypto.pbkdf2(password, salt, options.pbkdf2Iterations, options.pbkdf2KeyLength, options.pbkdf2Algorithm, function(err, hashRaw) {
+        if (err) {
+          return reject(err);
         }
 
-        return db.adaptor.update(user, changes);
-    } else {
-        return Promise.resolve();
+        return resolve({
+          hash: new Buffer(hashRaw, 'binary').toString(options.encoding),
+          salt: salt
+        });
+      });
+    });
+  });
+}
+
+function maybeSaveLoginAttempt(user, options, contextLog) {
+  if (hasLoginAttemptLimit(options)) {
+    var newAttempts = db.adaptor.getLoginAttempts(user) + 1;
+    var changes = {
+      loginAttempts: newAttempts
+    };
+
+    if (isLoginAttemptLocked(user, newAttempts, options)) {
+      changes.loginAttemptLockTime = Date.now();
+    } else if (db.adaptor.getLoginAttemptLockTime(user)) {
+      // if not locked but still has a value for lock time, reset it
+      changes.loginAttempts = 1;
+      changes.loginAttemptLockTime = null;
     }
+
+    return db.adaptor.update(user, changes).catch(function(err) {
+      contextLog.error(err);
+      return Promise.reject(err);
+    });
+  } else {
+    return Promise.resolve();
+  }
 }
 
 /////////////////////////
@@ -313,9 +328,9 @@ function maybeSaveLoginAttempt(user, options) {
 /////////////////////////
 
 function init(app, options) {
-    app.use(passport.initialize());
-    passport.use(createLocalStrategy(options));
-    passport.use(createJWTStrategy(options));
+  app.use(passport.initialize());
+  passport.use(createLocalStrategy(options));
+  passport.use(createJWTStrategy(options));
 }
 
 ///////////////////////////
