@@ -129,7 +129,10 @@ function authenticatePassword(user, password, options, contextLog) {
             loginAttempts: 0,
             lastLogin: Date.now(),
             loginAttemptLockTime: null
-          }).then(resolve).catch(resolve);
+          }).then(resolve).catch(function(err) {
+            contextLog.error(err);
+            resolve(); // resolve anyway
+          });
         } else {
           return resolve();
         }

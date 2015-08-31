@@ -1,52 +1,63 @@
 var extend = require('extend');
-
-var log = require('../logger')('UserController');
 var AuthController = require('./AuthController');
 var db = require('../db');
 var messenger = require('../messenger');
 var emitter = require('../emitter');
+var errors = require('../errors');
 
 ///////////////////////////
 //        HELPERS        //
 ///////////////////////////
 
-function sendResponse(options, req, res, data) {
+function sendResponse(options, req, res, data, error) {
   if (typeof options.apiEnvelope === 'function') {
-    data = options.apiEnvelope(req, res, data);
+    data = options.apiEnvelope(data, error, req, res);
+  }
+
+  if (error) {
+    req.log.warn(error);
   }
 
   res.json(data);
 }
 
 function getProfile(options, req, res) {
+  req.log.info('Get profile');
+
   sendResponse(options, req, res, db.adaptor.getProfile(req.user));
 }
 
 function updateProfile(options, req, res, next) {
+  req.log.info('Updating profile');
+
   db.adaptor.updateProfile(req.user, req.body).then(function(user) {
+    req.log.info('Updated profile');
     sendResponse(options, req, res, db.adaptor.getProfile(user));
-  }, function(err) {
-    return next(err);
-  });
+  }).catch(next);
 }
 
-function login(options, req, res) {
+function login(options, req, res, next) {
+  req.log.info('Logging in');
+
   AuthController.generateToken(req, res, options).then(function(token) {
+    req.log.info('Emitting login event');
     emitter.once('login', function(rq, rs, data) {
+      req.log.info('Received login event');
       sendResponse(options, rq, rs, data);
     }).emit('login', req, res, token);
-  });
+  }).catch(next);
 }
 
 function logout(options, req, res, next) {
+  req.log.info('Logging out');
+
   db.adaptor.update(req.user, {
     lastLogout: Date.now()
   }).then(function() {
     req.logout();
-    sendResponse(options, req, res, 'User has successfully logged out!');
-  }, function(err) {
-    return next(err);
-  });
+    req.log.info('Logged out');
+    sendResponse(options, req, res);
+  }).catch(next);
 }
 
 function getPasswordProps(req, options) {
@@ -66,49 +77,53 @@ function signup(options, req, res, next) {
   var password = req.body[options.passwordProperty];
 
   if (!username) {
-    return next(new Error('MissingUsernameError: signup missing username in request property ' + options.usernameProperty));
+    var missingUsernameErr = new errors.MissingUsernameError(null, options.usernameProperty);
+    return sendResponse(req, res, null, missingUsernameErr);
   }
 
   if (!password) {
-    return next(new Error('MissingPasswordError: signup missing password in request property ' + options.passwordProperty));
+    var missingPasswordErr = new errors.MissingPasswordError(null, options.passwordProperty);
+    return sendResponse(req, res, null, missingPasswordErr);
   }
 
-  log.info('Signing Up User:', username);
+  req.log = req.log.child({
+    username: username
+  });
+
+  req.log.info('Signing up user');
 
   db.adaptor.findByUsername(username).then(function(existingUser) {
     if (existingUser) {
-      return next(new Error('ExistingUserError: a user already exists with the ' + options.usernameProperty + ' ' + username));
+      var exisingUserErr = new errors.ExistingUserError(null, options.usernameProperty);
+      return sendResponse(req, res, null, exisingUserErr);
+    } else {
+      return saveNewUser(req, options).then(function(newUser) {
+        req.log = req.log.child({
+          username: '', // clear username association with user id in logs
+          user: newUser._id
+        });
+
+        req.log.info('Signed up user');
+        req.user = newUser;
+
+        return AuthController.generateToken(req, res, options);
+      }).then(function(token) {
+        req.log.info('Emitting signup event');
+        emitter.once('signup', function(rq, rs, data) {
+          req.log.info('Received signup event');
+          sendResponse(options, rq, rs, data);
+        }).emit('signup', req, res, token);
+      });
     }
-
-    saveNewUser(req, options).then(function(newUser) {
-      log.info('Signed Up User:', username);
-      req.user = newUser;
-
-      return AuthController.generateToken(req, res, options);
-    }).then(function(token) {
-      emitter.once('signup', function(rq, rs, data) {
-        sendResponse(options, rq, rs, data);
-      }).emit('signup', req, res, token);
-    }, function(err) {
-      log.error('Error saving new user during signup:', username, err);
-      return next(err);
-    });
-
-  }, function(err) {
-    log.error('Error regeristing User:', username, err);
-    return next(err);
-  });
+  }).catch(next);
 }
 
-function sendResetPasswordLink(user, options) {
-  var userId = db.adaptor.getId(user);
-  log.info('Generating reset password token for user:', userId);
+function sendResetPasswordLink(req, user, options) {
+  req.log.info('Generating reset password token');
   return AuthController.generateResetPasswordToken(user, options).then(function(token) {
-    log.info('Sending reset password link for user:', userId);
+    req.log.info('Sending reset password link');
     return messenger.adaptor.sendResetPasswordLink(user, token);
-  }).then(function() {
-    log.info('Successfully sent reset password token for user:', userId);
-  }).catch(console.log.bind(console));
+  });
 }
 
 function forgotPassword(options, req, res, next) {
@@ -116,44 +131,63 @@ function forgotPassword(options, req, res, next) {
   var email = req.body[options.emailProperty];
 
   if (!username || !email) {
-    return next(new Error('MissingUsernameOrEmailError: forgot password is missing a username or email in request property'));
+    return sendResponse(req, res, null, new errors.MissingRequestPropertyError(
+      null, 'username or email', options.usernameProperty + ' or ' + options.emailProperty
+    ));
   }
+
+  req.log = req.log.child({
+    username: username || '',
+    email: email || ''
+  });
+
+  req.log.info('Forgot password');
 
   var userPromise = username ? db.adaptor.findByUsername(username) : db.adaptor.findByEmail(email);
 
   userPromise.then(function(user) {
     if (user) {
-      return sendResetPasswordLink(user, options).then(function() {
-        sendResponse(options, req, res, 'Successfully sent password reset link to user!');
-      }).catch(function(err) {
-        console.log(err);
-        return next(err);
+      req.log = req.log.child({
+        username: '', // clear username association with user id in logs
+        email: '', // clear email association with user id in logs
+        user: user._id
       });
+
+      return sendResetPasswordLink(req, user, options).then(function() {
+        req.log.info('Successfully sent reset password token');
+        sendResponse(options, req, res);
+      }).catch(next);
     } else {
-      return next(null, false, {
-        message: 'UserDoesNotExistError'
-      });
+      var unknownUserErr = new errors.UnknownUserError(null, username || email);
+      return sendResponse(req, res, null, unknownUserErr);
     }
-  }).catch(function(err) {
-    log.error('Error finding user for forgot password:', username || email, err);
-    return next(err);
-  });
+  }).catch(next);
 }
 
 function resetPassword(options, req, res, next) {
   var password = req.body[options.passwordProperty];
 
   if (!password) {
-    return next(new Error('MissingPasswordError: resetPassword missing password in request property ' + options.passwordProperty));
+    var missingPasswordErr = new errors.MissingPasswordError(null, options.passwordProperty);
+    return sendResponse(req, res, null, missingPasswordErr);
   }
+
+  req.log.info('Reset Password');
 
   AuthController.getResetPasswordHashForToken(
     req.params.token, options
   ).then(function(resetPasswordHash) {
+    req.log.info('Finding user by reset password hash');
     return db.adaptor.findByResetPasswordHash(resetPasswordHash);
   }).then(function(user) {
+    req.user = user;
+    req.log = req.log.child({
+      user: user._id
+    });
+
     if (!user) {
-      return next(new Error('ExpiredResetPasswordTokenError'));
+      var invalidResetTokenErr = new errors.InvalidResetPasswordTokenError();
+      return sendResponse(req, res, null, invalidResetTokenErr);
     }
 
     var resetPasswordExpiration = +db.adaptor.getResetPasswordExpiration(user);
@@ -164,17 +198,16 @@ function resetPassword(options, req, res, next) {
           resetPasswordExpiration: null
         });
 
-        return db.adaptor.update(user, changes).then(function() {
-          sendResponse(options, req, res, 'Successfully reset password!');
-        });
+        return db.adaptor.update(req.user, changes);
+      }).then(function() {
+        req.log.info('Successfully reset password');
+        sendResponse(options, req, res);
       });
     } else {
-      return next(new Error('ExpiredResetPasswordTokenError'));
+      var expiredResetTokenErr = new errors.ExpiredResetPasswordTokenError();
+      return sendResponse(req, res, null, expiredResetTokenErr);
     }
-  }).catch(function(err) {
-    console.log(err);
-    return next(err);
-  });
+  }).catch(next);
 }
 
 ///////////////////////////

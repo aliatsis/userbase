@@ -36,8 +36,10 @@ function addAuthenticatedRouter(app, options, path, router, unauthenticatePaths)
 function init(app, options) {
   addAuthenticatedRouter(app, options, options.userPath, UserRouter(options));
 
-  // error handler configuration after routers are registered
-  addErrorMiddleware(app, options);
+  process.nextTick(function() {
+    // error handler configuration after routers are synchronously registered
+    addErrorMiddleware(app, options);
+  });
 }
 
 function addErrorMiddleware(app, options) {
@@ -49,7 +51,7 @@ function addErrorMiddleware(app, options) {
   });
 
   app.use(function(err, req, res, next) {
-    log.error(err);
+    (req.log || log).error(err);
 
     if (res.headersSent) {
       return next(err);
