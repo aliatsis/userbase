@@ -7,7 +7,6 @@ var crypto = require('crypto');
 var jwt = require('jsonwebtoken');
 var scmp = require('scmp');
 
-var log = require('../logger')('AuthController');
 var emitter = require('../emitter');
 var errors = require('../errors');
 var db = require('../db');
@@ -60,7 +59,9 @@ function isLoginAttemptLocked(user, loginAttempts, options) {
 
 function generateToken(req, res, options) {
   return new Promise(function(resolve) {
+    req.log.info('Emitting jwt-payload event');
     emitter.once('jwt-payload', function(rq, rs, payload) {
+      req.log.info('Received jwt-payload event');
       resolve(jwt.sign({}, options.secretOrKey, payload));
     }).emit('jwt-payload', req, res, {
       subject: db.adaptor.getId(req.user),
@@ -162,77 +163,72 @@ function authenticateUser(user, password, options, contextLog) {
 }
 
 function localAuthenticate(options) {
-  return function(username, password, done) {
-    var preAuthLog = log.child({
+  return function(req, username, password, done) {
+    req.log = req.log.child({
       username: username,
       strategy: 'local'
     });
 
     db.adaptor.findByUsername(username).then(function(user) {
       if (user) {
-        var contextLog = log.child({
-          user: user._id,
-          strategy: 'local'
+        req.log = req.log.child({
+          username: '', // clear username association with user id in logs
+          user: user._id
         });
 
-        contextLog.info('Authenticating user...');
+        req.log.info('Authenticating user...');
 
-        authenticateUser(user, password, options, contextLog).then(function() {
-          contextLog.info('Successfully authenticated user');
+        authenticateUser(user, password, options, req.log).then(function() {
+          req.log.info('Successfully authenticated user');
           done(null, user);
         }, function(err) {
-          contextLog.warn(err);
+          req.log.warn(err);
           done(null, false, options.apiEnvelope(null, err));
         }).catch(function(err) {
-          contextLog.error(err);
+          req.log.error(err);
           done(err);
         });
       } else {
         var unknownUsernameErr = new errors.UnknownUsernameError(null, username);
         var unknownUsernameData = options.apiEnvelope(null, unknownUsernameErr);
 
-        preAuthLog.warn(unknownUsernameErr);
+        req.log.warn(unknownUsernameErr);
         done(null, false, unknownUsernameData);
       }
     }).catch(function(err) {
-      preAuthLog.error(err);
+      req.log.error(err);
       done(err);
     });
   };
 }
 
 function jwtAuthenticate(options) {
-  return function(jwtPayload, done) {
-    var preAuthLog = log.child({
+  return function(req, jwtPayload, done) {
+    req.log = req.log.child({
       user: jwtPayload.sub,
       strategy: 'jwt'
     });
 
     db.adaptor.findById(jwtPayload.sub).then(function(user) {
       if (user) {
-        var contextLog = log.child({
-          user: user._id,
-          strategy: 'jwt'
-        });
-
-        contextLog.info('Authenticating user...');
+        req.log.info('Authenticating user...');
 
         validatePayloadForUser(user, jwtPayload).then(function() {
-          contextLog.info('Successfully authenticated user');
+          req.log.info('Successfully authenticated user');
           done(null, user);
         }, function(err) {
-          contextLog.warn(err);
+          req.log.warn(err);
           done(null, false, options.apiEnvelope(null, err));
         });
       } else {
         var unknownSubjetErr = new errors.UnknownJWTSubjectError(null, jwtPayload.sub);
         var unknownSubjectData = options.apiEnvelope(null, unknownSubjetErr);
 
-        preAuthLog.warn(unknownSubjetErr);
+        req.log.warn(unknownSubjetErr);
         done(null, false, unknownSubjectData);
       }
     }).catch(function(err) {
-      preAuthLog.error(err);
+      req.log.error(err);
       done(err);
     });
   };
@@ -260,13 +256,15 @@ function validatePayloadForUser(user, jwtPayload) {
 function createLocalStrategy(options) {
   return new LocalStrategy({
     usernameField: options.usernameProperty,
-    passwordField: options.passwordProperty
+    passwordField: options.passwordProperty,
+    passReqToCallback: true
   }, localAuthenticate(options));
 }
 
 function createJWTStrategy(options) {
   return new JwtStrategy({
-    secretOrKey: options.secretOrKey
+    secretOrKey: options.secretOrKey,
+    passReqToCallback: true
   }, jwtAuthenticate(options));
 }
 

@@ -1,7 +1,8 @@
 var VError = require('verror');
 var AuthController = require('../controllers/AuthController');
 var UserRouter = require('./UserRouter');
-var log = require('../logger')('router');
+var logger = require('../logger');
+var log = logger('router');
 
 ///////////////////////////
 //        HELPERS        //
@@ -19,6 +20,11 @@ function addAuthenticatedRouter(app, options, path, router, unauthenticatePaths)
       unauthenticatePaths = [unauthenticatePaths].concat(defaultUnauthenticatedUserPaths);
     }
   }
+
+  app.use(function(req, res, next) {
+    req.log = logger(path + ' router');
+    next();
+  });
 
   app.use(options.basePath + path, AuthController.authenticate(unauthenticatePaths, options), router);
 }
