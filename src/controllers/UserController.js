@@ -78,12 +78,12 @@ function signup(options, req, res, next) {
 
   if (!username) {
     var missingUsernameErr = new errors.MissingUsernameError(null, options.usernameProperty);
-    return sendResponse(req, res, null, missingUsernameErr);
+    return sendResponse(options, req, res, null, missingUsernameErr);
   }
 
   if (!password) {
     var missingPasswordErr = new errors.MissingPasswordError(null, options.passwordProperty);
-    return sendResponse(req, res, null, missingPasswordErr);
+    return sendResponse(options, req, res, null, missingPasswordErr);
   }
 
   req.log = req.log.child({
@@ -95,7 +95,7 @@ function signup(options, req, res, next) {
   db.adaptor.findByUsername(username).then(function(existingUser) {
     if (existingUser) {
       var exisingUserErr = new errors.ExistingUserError(null, options.usernameProperty);
-      return sendResponse(req, res, null, exisingUserErr);
+      return sendResponse(options, req, res, null, exisingUserErr);
     } else {
       return saveNewUser(req, options).then(function(newUser) {
         req.log = req.log.child({
@@ -131,7 +131,7 @@ function forgotPassword(options, req, res, next) {
   var email = req.body[options.emailProperty];
 
   if (!username || !email) {
-    return sendResponse(req, res, null, new errors.MissingRequestPropertyError(
+    return sendResponse(options, req, res, null, new errors.MissingRequestPropertyError(
       null, 'username or email', options.usernameProperty + ' or ' + options.emailProperty
     ));
   }
@@ -159,7 +159,7 @@ function forgotPassword(options, req, res, next) {
       }).catch(next);
     } else {
       var unknownUserErr = new errors.UnknownUserError(null, username || email);
-      return sendResponse(req, res, null, unknownUserErr);
+      return sendResponse(options, req, res, null, unknownUserErr);
     }
   }).catch(next);
 }
@@ -169,7 +169,7 @@ function resetPassword(options, req, res, next) {
 
   if (!password) {
     var missingPasswordErr = new errors.MissingPasswordError(null, options.passwordProperty);
-    return sendResponse(req, res, null, missingPasswordErr);
+    return sendResponse(options, req, res, null, missingPasswordErr);
   }
 
   req.log.info('Reset Password');
@@ -187,7 +187,7 @@ function resetPassword(options, req, res, next) {
 
     if (!user) {
       var invalidResetTokenErr = new errors.InvalidResetPasswordTokenError();
-      return sendResponse(req, res, null, invalidResetTokenErr);
+      return sendResponse(options, req, res, null, invalidResetTokenErr);
     }
 
     var resetPasswordExpiration = +db.adaptor.getResetPasswordExpiration(user);
@@ -205,7 +205,7 @@ function resetPassword(options, req, res, next) {
       });
     } else {
       var expiredResetTokenErr = new errors.ExpiredResetPasswordTokenError();
-      return sendResponse(req, res, null, expiredResetTokenErr);
+      return sendResponse(options, req, res, null, expiredResetTokenErr);
     }
   }).catch(next);
 }

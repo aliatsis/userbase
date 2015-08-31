@@ -62,6 +62,7 @@ function createUserbaseApp(options) {
   exports.registerDbAdaptor = registerDbAdaptor.bind(this, app, options);
   exports.registerMessageAdaptor = registerMessageAdaptor.bind(this, app, options);
   exports.emitter = emitter;
+  exports.apiEnvelope = options.apiEnvelope;
 
   return app;
 }
