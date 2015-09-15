@@ -24,8 +24,19 @@ userbaseDomain.on('error', function(err) {
   process.exit(1);
 });
 
+morgan.token('user', function getId(req) {
+  return req.user && req.user._id || '';
+});
+
 function init(app, options) {
-  app.use(morgan(process.env.NODE_ENV === 'development' ? 'dev' : 'combined'));
+  var morganFormat = morgan.combined.replace(':status', ':status :user');
+
+  if (process.env.NODE_ENV === 'development') {
+    morganFormat = 'dev';
+  }
+
+  app.use(morgan(morganFormat));
+
   app.use(bodyParser.json());
   app.use(bodyParser.urlencoded({
     extended: false
