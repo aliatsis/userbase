@@ -13,7 +13,7 @@ var AuthController = require('./controllers/AuthController');
 var router = require('./router');
 var defaultOptions = require('./defaultOptions');
 var emitter = require('./emitter');
-var errors = require('../errors');
+var errors = require('./errors');
 
 var userbaseDomain = domain.create();
 
