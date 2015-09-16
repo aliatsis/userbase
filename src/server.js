@@ -13,6 +13,8 @@ var AuthController = require('./controllers/AuthController');
 var router = require('./router');
 var defaultOptions = require('./defaultOptions');
 var emitter = require('./emitter');
+var errors = require('../errors');
+
 var userbaseDomain = domain.create();
 
 /////////////////////////
@@ -74,6 +76,7 @@ function createUserbaseApp(options) {
   exports.registerMessageAdaptor = registerMessageAdaptor.bind(this, app, options);
   exports.emitter = emitter;
   exports.apiEnvelope = options.apiEnvelope;
+  exports.errors = errors;
 
   return app;
 }

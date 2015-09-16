@@ -1,27 +1,39 @@
 var util = require('util');
 
-var errorNameToDefaultMessage = {
-  UnknownUserError: 'No user was found for: %s',
-  UnknownUsernameError: 'No user was found with username: %s',
-  UnknownJWTSubjectError: 'No user was found with id: %s',
-  InvalidJWTPayloadError: 'JWT payload is invalid. user: %s; payload: %j',
-  LogoutExpiredJWTError: 'JWT has expired due to user logout post iat. user: %s',
-  InvalidCredentialsError: 'Incorrect username and password combination',
-  LockedAccountError: 'User account has been locked due to excessive failed authentication attempts',
-  NoSaltError: 'User does not have a salt stored.',
-  MissingRequestPropertyError: 'Missing %s in request property: %s',
-  MissingUsernameError: 'Missing username in request property: %s',
-  MissingEmailError: 'Missing email in request property: %s',
-  MissingPasswordError: 'Missing password in request property: %s',
-  ExistingUserError: 'A user already exists with that %s',
-  InvalidResetPasswordTokenError: 'Reset password token is invalid',
-  ExpiredResetPasswordTokenError: 'Reset password token is expired'
+module.exports.add = function() {
+  var arg0 = arguments[0];
+  if (typeof arg0 === 'string') {
+    addOne(arg0, arguments[1]);
+  } else if (typeof arg0 === 'object') {
+    Object.keys(arg0).forEach(function(errorName) {
+      addOne(errorName, arg0[errorName]);
+    });
+  }
 };
 
-Object.keys(errorNameToDefaultMessage).forEach(function(errorName) {
-  var defaultMessage = errorNameToDefaultMessage[errorName];
+(function init() {
+  module.exports.add({
+    UnknownUserError: 'No user was found for: %s',
+    UnknownUsernameError: 'No user was found with username: %s',
+    UnknownJWTSubjectError: 'No user was found with id: %s',
+    InvalidJWTPayloadError: 'JWT payload is invalid. user: %s; payload: %j',
+    LogoutExpiredJWTError: 'JWT has expired due to user logout post iat. user: %s',
+    InvalidCredentialsError: 'Incorrect username and password combination',
+    LockedAccountError: 'User account has been locked due to excessive failed authentication attempts',
+    NoSaltError: 'User does not have a salt stored.',
+    MissingRequestPropertyError: 'Missing %s in request property: %s',
+    MissingUsernameError: 'Missing username in request property: %s',
+    MissingEmailError: 'Missing email in request property: %s',
+    MissingPasswordError: 'Missing password in request property: %s',
+    ExistingUserError: 'A user already exists with that %s',
+    InvalidResetPasswordTokenError: 'Reset password token is invalid',
+    ExpiredResetPasswordTokenError: 'Reset password token is expired'
+  });
+})();
+
+function addOne(errorName, defaultMessage) {
   module.exports[errorName] = makeError(errorName, defaultMessage);
-});
+}
 
 function makeError(name, defaultMessage) {
   var errorFn = function(message) {
