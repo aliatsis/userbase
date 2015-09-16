@@ -74,9 +74,7 @@ function createUserbaseApp(options) {
   exports.addAuthenticatedRouter = router.addAuthenticatedRouter.bind(this, app, options);
   exports.registerDbAdaptor = registerDbAdaptor.bind(this, app, options);
   exports.registerMessageAdaptor = registerMessageAdaptor.bind(this, app, options);
-  exports.emitter = emitter;
   exports.apiEnvelope = options.apiEnvelope;
-  exports.errors = errors;
 
   return app;
 }
@@ -86,3 +84,6 @@ function createUserbaseApp(options) {
 ///////////////////////////
 
 exports = module.exports = userbaseDomain.bind(createUserbaseApp);
+
+exports.emitter = emitter;
+exports.errors = errors;
