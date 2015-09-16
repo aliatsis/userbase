@@ -25,6 +25,11 @@ module.exports = {
   resetPasswordTokenLength: 32,
   resetPasswordExpiration: 15, // minutes
   apiEnvelope: function(data, error, req, res) {
+    if (data instanceof Error) {
+      error = data;
+      data = null;
+    }
+
     var result = {
       result: data
     };
