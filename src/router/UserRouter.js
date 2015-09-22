@@ -11,5 +11,13 @@ module.exports = function(options) {
     .get(UserController.getProfile.bind(null, options))
     .put(UserController.updateProfile.bind(null, options));
 
+  //OAuth routes
+  router.route(options.routes.googleOAuth).all(function(req, res, next) {
+    next();
+  });
+  router.route(options.routes.googleOAuthCallback).all(function(req, res, next) {
+    next();
+  });
+
   return router;
 };
