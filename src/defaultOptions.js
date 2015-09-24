@@ -1,22 +1,19 @@
 var port = process.env.PORT || 8080;
-var baseURL = 'http://127.0.0.1:' + port;
 var userPath = '/user';
-var googleOAuthCallback = '/auth/google/callback';
 
 module.exports = {
   port: port,
-  baseURL: baseURL,
   basePath: '',
   userPath: userPath,
   routes: {
     login: '/login',
+    loginOAuth: '/login/oauth',
     logout: '/logout',
     signup: '/signup',
     profile: '/profile',
+    oAuthProfile: '/profile/oauth',
     forgotPassword: '/forgotPassword',
-    resetPassword: '/resetPassword',
-    googleOAuth: '/auth/google',
-    googleOAuthCallback: googleOAuthCallback
+    resetPassword: '/resetPassword'
   },
   usernameProperty: 'username',
   passwordProperty: 'password',
@@ -52,7 +49,5 @@ module.exports = {
     return result;
   },
   secretOrKey: 'secret',
-  googleOAuth: false,
-  googleScope: 'email profile',
-  googleCallbackURL: baseURL + userPath + googleOAuthCallback
+  facebookProfileFields: ''
 };

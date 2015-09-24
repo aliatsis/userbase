@@ -1,13 +1,12 @@
 var passport = require('passport');
 var LocalStrategy = require('passport-local').Strategy;
 var JwtStrategy = require('passport-jwt').Strategy;
-var GoogleStrategy = require('passport-google-oauth').OAuth2Strategy;
+var OAuthAccessTokenStrategy = require('passport-oauth-access-token').Strategy;
 var Promise = require('es6-promise').Promise;
 var unless = require('express-unless');
 var crypto = require('crypto');
 var jwt = require('jsonwebtoken');
 var scmp = require('scmp');
-var extend = require('extend');
 
 var emitter = require('../emitter');
 var errors = require('../errors');
@@ -19,15 +18,16 @@ var db = require('../db');
 
 function authenticate(ignoredPaths, options) {
   var middleware = function(req) {
+    var isLoginRoute = req.url === options.routes.login;
+    var isLoginOAuthRoute = req.url === options.routes.loginOAuth;
+    var isOAuthProfileRoute = req.url === options.routes.oAuthProfile;
     var authenticator;
 
     // use local strategy for login request
-    if (~req.url.indexOf(options.routes.login)) {
+    if (isLoginRoute) {
       authenticator = getAuthenticator('local');
-    } else if (~req.url.indexOf(options.routes.googleOAuth) || ~req.url.indexOf(options.routes.googleOAuthCallback)) {
-      authenticator = getAuthenticator('google', {
-        scope: options.googleScope
-      });
+    } else if (isLoginOAuthRoute || isOAuthProfileRoute) {
+      authenticator = getAuthenticator('oAuthAccessToken');
     } else {
       authenticator = getAuthenticator('jwt');
     }
@@ -243,16 +243,38 @@ function jwtAuthenticate(options) {
   };
 }
 
-function googleAuthenticate(options) {
-  return function(req, accessToken, refreshToken, profile, done) {
-    var googleId = profile && profile.id;
+function oAuthAccessTokenAuthenticate(options) {
+  return function(req, accessToken, oAuthUserId, done) {
+    var isOAuthProfileRoute = ~req.url.indexOf(options.routes.oAuthProfile);
+    var oAuthProvider = req.body.oAuthProvider;
+    var userPromise;
 
     req.log = req.log.child({
-      googleId: googleId,
-      strategy: 'google'
+      oAuthUser: oAuthUserId,
+      oAuthProvider: oAuthProvider
     });
 
-    db.adaptor.findByGoogleProfile(profile).then(function(user) {
+    // oauth profile just needs the id
+    if (isOAuthProfileRoute) {
+      return done(null, oAuthUserId);
+    }
+
+    switch (oAuthProvider) {
+      case 'google':
+        userPromise = db.adaptor.findByGoogleId(oAuthUserId);
+        break;
+      case 'facebook':
+        userPromise = db.adaptor.findByFacebookId(oAuthUserId);
+        break;
+    }
+
+    if (!userPromise) {
+      var unknownOAuthProviderError = new errors.UnknownOAuthProviderError(null, oAuthProvider);
+      req.log.error(unknownOAuthProviderError);
+      return done(unknownOAuthProviderError);
+    }
+
+    userPromise.then(function(user) {
       if (user) {
         req.log = req.log.child({
           user: user.id
@@ -261,11 +283,8 @@ function googleAuthenticate(options) {
         req.log.info('Successfully authenticated user');
         done(null, user);
       } else {
-        var unknownGoogleUserError = new errors.UnknownGoogleUserError(null, googleId);
-        req.log.info('Could not find user with google profile');
-
-        // pass UnknownGoogleUserError as the use so the authenticated route can know what to do
-        done(null, profile);
+        req.log.info('Could not find user by oauth user id');
+        done();
       }
     }).catch(function(err) {
       req.log.error(err);
@@ -308,27 +327,19 @@ function createJWTStrategy(options) {
   }, jwtAuthenticate(options));
 }
 
-function createGoogleStrategy(options) {
-  if (!options.googleClientId) {
-    throw new errors.MissingGoogleClientIdError();
-  }
-
-  if (!options.googleClientSecret) {
-    throw new errors.MissingGoogleClientSecretError();
-  }
-
-  return new GoogleStrategy({
-    clientID: options.googleClientId,
-    clientSecret: options.googleClientSecret,
-    callbackURL: options.googleCallbackURL,
+function createOAuthAccessTokenStrategy(options) {
+  return new OAuthAccessTokenStrategy({
+    googleClientId: options.googleClientId,
+    facebookClientId: options.facebookClientId,
+    facebookClientSecret: options.facebookClientSecret,
     passReqToCallback: true
-  }, googleAuthenticate(options));
+  }, oAuthAccessTokenAuthenticate(options));
 }
 
-function getAuthenticator(strategy, strategyOptions) {
-  return passport.authenticate(strategy, extend(strategyOptions, {
+function getAuthenticator(strategy) {
+  return passport.authenticate(strategy, {
     session: false
-  }));
+  });
 }
 
 function getHashAndSaltForPassword(password, options) {
@@ -386,10 +397,7 @@ function init(app, options) {
   app.use(passport.initialize());
   passport.use(createLocalStrategy(options));
   passport.use(createJWTStrategy(options));
-
-  if (options.googleOAuth) {
-    passport.use(createGoogleStrategy(options));
-  }
+  passport.use(createOAuthAccessTokenStrategy(options));
 }
 
 ///////////////////////////

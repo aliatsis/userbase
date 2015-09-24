@@ -4,22 +4,11 @@ var db = require('../db');
 var messenger = require('../messenger');
 var emitter = require('../emitter');
 var errors = require('../errors');
+var sendResponse = require('../sendResponse');
 
 ///////////////////////////
 //        HELPERS        //
 ///////////////////////////
-
-function sendResponse(options, req, res, data, error) {
-  if (typeof options.apiEnvelope === 'function') {
-    data = options.apiEnvelope(data, error, req, res);
-  }
-
-  if (error) {
-    req.log.warn(error);
-  }
-
-  res.json(data);
-}
 
 function getProfile(options, req, res) {
   req.log.info('Get profile');

@@ -27,7 +27,7 @@ module.exports.add = function() {
     MissingPasswordError: 'Missing password in request property: %s',
     MissingGoogleClientIdError: 'Missing googleClientId for Google OAuth 2.0 authentication',
     MissingGoogleClientSecretError: 'Missing googleClientSecret for Google OAuth 2.0 authentication',
-    UnknownGoogleUserError: 'No google user was found with profile id: %s',
+    UnknownOAuthProviderError: 'Unknown OAuth provider: %s',
     ExistingUserError: 'A user already exists with that %s',
     InvalidResetPasswordTokenError: 'Reset password token is invalid',
     ExpiredResetPasswordTokenError: 'Reset password token is expired'

@@ -59,7 +59,8 @@ function addErrorMiddleware(app, options) {
 
     var data = options.apiEnvelope(null, err);
 
-    res.status(err.status || 500).send(data);
+    // request library uses statucCode
+    res.status(err.status || err.statusCode || 500).send(data);
   });
 }
 

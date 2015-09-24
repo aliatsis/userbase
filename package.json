@@ -41,9 +41,10 @@
     "method-override": "~2.3.2",
     "morgan": "~1.5.3",
     "passport": "~0.2.1",
-    "passport-google-oauth": "~0.2.0",
     "passport-jwt": "~1.1.0",
     "passport-local": "~1.0.0",
+    "passport-oauth-access-token": "~0.0.0",
+    "request-promise": "~0.4.3",
     "scmp": "~1.0.0",
     "validate": "~2.1.6",
     "verror": "~1.6.0"
