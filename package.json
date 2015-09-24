@@ -1,6 +1,6 @@
 {
   "name": "userbase",
-  "version": "0.0.30",
+  "version": "0.0.31",
   "description": "A flexible and configurable Node Express API server with security conscious authentication and user account management",
   "main": "index.js",
   "scripts": {},
