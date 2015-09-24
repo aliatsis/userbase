@@ -50,7 +50,13 @@ function logout(options, req, res, next) {
 }
 
 function getPasswordProps(req, options) {
-  return AuthController.getHashAndSaltForPassword(req.body[options.passwordProperty], options);
+  var password = req.body[options.passwordProperty];
+
+  if (password) {
+    return AuthController.getHashAndSaltForPassword(password, options);
+  } else {
+    return Promise.resolve({});
+  }
 }
 
 function saveNewUser(req, options) {
@@ -70,9 +76,14 @@ function signup(options, req, res, next) {
     return sendResponse(options, req, res, null, missingUsernameErr);
   }
 
-  if (!password) {
+  if (!password && requirePasswordForSignupRequest(req, options)) {
     var missingPasswordErr = new errors.MissingPasswordError(null, options.passwordProperty);
     return sendResponse(options, req, res, null, missingPasswordErr);
+  }
+
+  if (!password && !requestHasOAuth(req, options)) {
+    var invalidSignupRequestError = new errors.InvalidSignupRequestError();
+    return sendResponse(options, req, res, null, invalidSignupRequestError);
   }
 
   req.log = req.log.child({
@@ -105,6 +116,15 @@ function signup(options, req, res, next) {
       });
     }
   }).catch(next);
+}
+
+function requirePasswordForSignupRequest(req, options) {
+  var hasOAuth = requestHasOAuth(req, options);
+  return !hasOAuth || (hasOAuth && options.requirePasswordForOAuthSignup);
+}
+
+function requestHasOAuth(req, options) {
+  return !!(req.body[options.googleIdProperty] || req.body[options.facebookIdProperty]);
 }
 
 function sendResetPasswordLink(req, user, options) {

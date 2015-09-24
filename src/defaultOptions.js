@@ -18,6 +18,8 @@ module.exports = {
   usernameProperty: 'username',
   passwordProperty: 'password',
   emailProperty: 'email',
+  googleIdProperty: 'googleId',
+  facebookIdProperty: 'facebookId',
   loginAttemptLimit: 5,
   loginAttemptLockDuration: 15, // minutes
   pbkdf2Iterations: 25000,
@@ -49,5 +51,6 @@ module.exports = {
     return result;
   },
   secretOrKey: 'secret',
+  requirePasswordForOAuthSignup: false,
   facebookProfileFields: ''
 };

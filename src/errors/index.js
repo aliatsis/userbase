@@ -30,7 +30,8 @@ module.exports.add = function() {
     UnknownOAuthProviderError: 'Unknown OAuth provider: %s',
     ExistingUserError: 'A user already exists with that %s',
     InvalidResetPasswordTokenError: 'Reset password token is invalid',
-    ExpiredResetPasswordTokenError: 'Reset password token is expired'
+    ExpiredResetPasswordTokenError: 'Reset password token is expired',
+    InvalidSignupRequestError: 'The signup request has insufficient data. A password or OAuth user id is required'
   });
 })();
 
