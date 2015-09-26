@@ -61,7 +61,9 @@ function getPasswordProps(req, options) {
 
 function saveNewUser(req, options) {
   return getPasswordProps(req, options).then(function(passwordProps) {
-    var props = extend({}, req.body, passwordProps); // make copy to be safe
+    var props = extend({
+      signupDate: Date.now()
+    }, req.body, passwordProps); // make copy to be safe
 
     return db.adaptor.create(props);
   });
