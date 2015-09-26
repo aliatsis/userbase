@@ -61,8 +61,10 @@ function getPasswordProps(req, options) {
 
 function saveNewUser(req, options) {
   return getPasswordProps(req, options).then(function(passwordProps) {
+    var now = Date.now();
     var props = extend({
-      signupDate: Date.now()
+      signupDate: now,
+      lastLogin: now
     }, req.body, passwordProps); // make copy to be safe
 
     return db.adaptor.create(props);
