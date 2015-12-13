@@ -48,14 +48,13 @@ function init(app, options) {
 
   // configure athentication middleware
   AuthController(app, options);
+
+  router(app, options);
+  log.info('Registered API routes');
 }
 
 function registerDbAdaptor(app, options, dbAdaptor) {
   return db(dbAdaptor).then(function() {
-    // register api routes on successful db connection
-    router(app, options);
-    log.info('Registered API routes');
-
     app.listen(options.port);
     log.info('App listening on port', options.port);
   });
