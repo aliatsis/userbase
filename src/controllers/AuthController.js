@@ -32,12 +32,18 @@ function authenticate(ignoredPaths, options) {
       authenticator = getAuthenticator('jwt');
     }
 
+    req.log('Emitting before-authenticate event');
     emitter.once('before-authenticate', function() {
+      req.log('Received before-authenticate event');
+
       authenticator(req, res, function(err) {
         var args = arguments;
 
         if (!err && req.user) {
+          req.log('Emitting after-authenticate event');
+
           emitter.once('after-authenticate', function() {
+            req.log('Received after-authenticate event');
             next.apply(this, args);
           }).emit('after-authenticate', req, res);
         } else {
