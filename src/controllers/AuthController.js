@@ -17,7 +17,7 @@ var db = require('../db');
 ///////////////////////////
 
 function authenticate(ignoredPaths, options) {
-  var middleware = function(req) {
+  var middleware = function(req, res, next) {
     var isLoginRoute = req.url === options.routes.login;
     var isLoginOAuthRoute = req.url === options.routes.loginOAuth;
     var isOAuthProfileRoute = req.url === options.routes.oAuthProfile;
@@ -32,7 +32,19 @@ function authenticate(ignoredPaths, options) {
       authenticator = getAuthenticator('jwt');
     }
 
-    authenticator.apply(this, arguments);
+    emitter.once('before-authenticate', function() {
+      authenticator(req, res, function(err) {
+        var args = arguments;
+
+        if (!err && req.user) {
+          emitter.once('after-authenticate', function() {
+            next.apply(this, args);
+          }).emit('after-authenticate', req, res);
+        } else {
+          next.apply(this, args);
+        }
+      });
+    }).emit('before-authenticate', req, res);
   };
 
   middleware.unless = unless;
