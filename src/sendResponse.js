@@ -1,3 +1,5 @@
+var emitter = require('../emitter');
+
 module.exports = function sendResponse(options, req, res, data, error) {
   if (typeof options.apiEnvelope === 'function') {
     data = options.apiEnvelope(data, error, req, res);
@@ -7,5 +9,7 @@ module.exports = function sendResponse(options, req, res, data, error) {
     req.log.warn(error);
   }
 
-  res.json(data);
+  emitter.once('before-send', function(rq, rs, dataToSend) {
+    res.json(dataToSend);
+  }).emit('before-send', req, res, data, error);
 };
