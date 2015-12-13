@@ -42,6 +42,7 @@ function authenticate(ignoredPaths, options) {
         if (!err && req.user) {
           req.log.info('Emitting after-authenticate event');
 
+          // CAVEAT: req.user can be a user object OR a userId string for this event
           emitter.once('after-authenticate', function() {
             req.log.info('Received after-authenticate event');
             next.apply(this, args);
