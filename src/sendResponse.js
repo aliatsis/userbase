@@ -1,4 +1,4 @@
-var emitter = require('../emitter');
+var emitter = require('./emitter');
 
 module.exports = function sendResponse(options, req, res, data, error) {
   if (typeof options.apiEnvelope === 'function') {
