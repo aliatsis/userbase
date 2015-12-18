@@ -48,12 +48,6 @@ function init(app, options) {
 
   // configure athentication middleware
   AuthController(app, options);
-
-  emitter.once('before-routes', function() {
-    router(app, options);
-  }).emit('before-routes', app);
-
-  log.info('Registered API routes');
 }
 
 function registerDbAdaptor(app, options, dbAdaptor) {
@@ -67,6 +61,12 @@ function registerMessageAdaptor(app, options, messageAdaptor) {
   return messenger(messageAdaptor);
 }
 
+function registerRoutes(app, options) { 
+  router(app, options);
+
+  log.info('Registered userbase routes');
+}
+
 function createUserbaseApp(options) {
   var app = express();
   options = extend(true, defaultOptions, options);
@@ -74,6 +74,7 @@ function createUserbaseApp(options) {
   init(app, options);
 
   exports.addAuthenticatedRouter = router.addAuthenticatedRouter.bind(this, app, options);
+  exports.registerRoutes = registerRoutes.bind(this, app, options);
   exports.registerDbAdaptor = registerDbAdaptor.bind(this, app, options);
   exports.registerMessageAdaptor = registerMessageAdaptor.bind(this, app, options);
   exports.apiEnvelope = options.apiEnvelope;
