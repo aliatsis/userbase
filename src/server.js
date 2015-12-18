@@ -49,7 +49,10 @@ function init(app, options) {
   // configure athentication middleware
   AuthController(app, options);
 
-  router(app, options);
+  emitter.once('before-routes', function() {
+    router(app, options);
+  }).emit('before-routes', app);
+
   log.info('Registered API routes');
 }
 
