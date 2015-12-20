@@ -73,6 +73,7 @@ function createUserbaseApp(options) {
 
   init(app, options);
 
+  exports.addRouter = router.addRouter.bind(this, app, options);
   exports.addAuthenticatedRouter = router.addAuthenticatedRouter.bind(this, app, options);
   exports.registerRoutes = registerRoutes.bind(this, app, options);
   exports.registerDbAdaptor = registerDbAdaptor.bind(this, app, options);

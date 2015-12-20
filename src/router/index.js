@@ -21,12 +21,14 @@ function addAuthenticatedRouter(app, options, path, router, unauthenticatePaths)
     }
   }
 
-  app.use(function(req, res, next) {
-    req.log = logger(path + ' router');
-    next();
-  });
+  addLoggerMiddleware(app, path);
 
   app.use(options.basePath + path, AuthController.authenticate(unauthenticatePaths, options), router);
+}
+
+function addRouter(app, options, path, router) {
+  addLoggerMiddleware(app, path);
+  app.use(options.basePath + path, router);
 }
 
 /////////////////////////
@@ -39,6 +41,13 @@ function init(app, options) {
   process.nextTick(function() {
     // error handler configuration after routers are synchronously registered
     addErrorMiddleware(app, options);
+  });
+}
+
+function addLoggerMiddleware(app, routerPath) {
+  app.use(function(req, res, next) {
+    req.log = logger(routerPath + ' router');
+    next();
   });
 }
 
@@ -76,4 +85,5 @@ function getUnauthenticatedUserPaths(options) {
 
 exports = module.exports = init;
 
+exports.addRouter = addRouter;
 exports.addAuthenticatedRouter = addAuthenticatedRouter;
