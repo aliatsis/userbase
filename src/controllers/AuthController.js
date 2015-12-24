@@ -64,10 +64,10 @@ function getAuthenticateByPathMiddleware(options, authToPathMap) {
   var defaultStrategy = authToPathMap.default || 'jwt';
   var unauthenticatePaths = authToPathMap.none || [];
   var pathToStrategyMap = Object.keys(authToPathMap).reduce(function(result, strategy) {
+    var pathsForAuth = authToPathMap[strategy];
     strategy = strategy === 'oauth' ? 'oAuthAccessToken' : strategy;
 
     if (strategy !== 'default' && strategy !== 'none') {
-      var pathsForAuth = authToPathMap[strategy];
       pathsForAuth = Array.isArray(pathsForAuth) ? pathsForAuth : (pathsForAuth && [pathsForAuth] || []);
 
       pathsForAuth.forEach(function(path) {
