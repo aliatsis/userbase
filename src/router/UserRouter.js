@@ -1,8 +1,9 @@
-var router = require('express').Router();
 var UserController = require('../controllers/UserController');
 var OAuthController = require('../controllers/OAuthController');
 
-module.exports = function(options) {
+module.exports = function(options, router) {
+  router = router || require('express').Router();
+
   router.route(options.routes.login).post(UserController.login.bind(null, options));
   router.route(options.routes.loginOAuth).post(UserController.login.bind(null, options));
   router.route(options.routes.logout).post(UserController.logout.bind(null, options));

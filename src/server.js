@@ -3,8 +3,10 @@ var morgan = require('morgan');
 var cookieParser = require('cookie-parser');
 var bodyParser = require('body-parser');
 var methodOverride = require('method-override');
+var ipaddr = require('ipaddr.js');
 var extend = require('extend');
 var domain = require('domain');
+var VError = require('verror');
 
 var log = require('./logger')('server');
 var db = require('./db');
@@ -46,8 +48,17 @@ function init(app, options) {
   app.use(methodOverride());
   app.use(cookieParser());
 
+  if (options.ipv4) {
+    addIPv4Middleware(app);
+  }
+
   // configure athentication middleware
   AuthController(app, options);
+
+  process.nextTick(function() {
+    // error handler configuration after routers are synchronously registered
+    addErrorMiddleware(app, options);
+  });
 }
 
 function registerDbAdaptor(app, options, dbAdaptor) {
@@ -61,10 +72,44 @@ function registerMessageAdaptor(app, options, messageAdaptor) {
   return messenger(messageAdaptor);
 }
 
-function registerRoutes(app, options) { 
-  router(app, options);
+function addIPv4Middleware(app) {
+  app.use(function(req, res, next) {
+    var ip = req.ip;
 
-  log.info('Registered userbase routes');
+    Object.defineProperty(req, 'ip', {
+      get: function() {
+        return ip;
+      },
+      set: function(val) {
+        ip = ipaddr.process(val).toString();
+      }
+    });
+
+    req.ip = req.ip;
+    next();
+  });
+}
+
+function addErrorMiddleware(app, options) {
+  // catch 404 and forward to error handler
+  app.use(function(req, res, next) {
+    var err = new VError('Not Found');
+    err.status = 404;
+    next(err);
+  });
+
+  app.use(function(err, req, res, next) {
+    (req.log || log).error(err);
+
+    if (res.headersSent) {
+      return next(err);
+    }
+
+    var data = options.apiEnvelope(null, err);
+
+    // request library uses statucCode
+    res.status(err.status || err.statusCode || 500).send(data);
+  });
 }
 
 function createUserbaseApp(options) {
@@ -73,9 +118,7 @@ function createUserbaseApp(options) {
 
   init(app, options);
 
-  exports.addRouter = router.addRouter.bind(this, app, options);
-  exports.addAuthenticatedRouter = router.addAuthenticatedRouter.bind(this, app, options);
-  exports.registerRoutes = registerRoutes.bind(this, app, options);
+  exports.router = router(app, options);
   exports.registerDbAdaptor = registerDbAdaptor.bind(this, app, options);
   exports.registerMessageAdaptor = registerMessageAdaptor.bind(this, app, options);
   exports.apiEnvelope = options.apiEnvelope;

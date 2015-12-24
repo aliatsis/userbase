@@ -52,5 +52,6 @@ module.exports = {
   },
   secretOrKey: 'secret',
   requirePasswordForOAuthSignup: false,
-  facebookProfileFields: ''
+  facebookProfileFields: '',
+  ipv4: true
 };

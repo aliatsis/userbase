@@ -13,52 +13,117 @@ var errors = require('../errors');
 var db = require('../db');
 
 ///////////////////////////
+//        PUBLIC         //
+///////////////////////////
+
+exports = module.exports = init;
+
+exports.authenticateByPath = getAuthenticateByPathMiddleware;
+exports.authenticateLocal = getAuthenticateLocalMiddleware;
+exports.authenticateOAuth = getAuthenticateOAuthMiddleware;
+exports.authenticateJWT = getAuthenticateJWTMiddleware;
+exports.generateToken = generateToken;
+exports.getHashAndSaltForPassword = getHashAndSaltForPassword;
+exports.generateResetPasswordToken = generateResetPasswordToken;
+exports.getResetPasswordHashForToken = getResetPasswordHashForToken;
+
+/////////////////////////
+//        INIT         //
+/////////////////////////
+
+function init(app, options) {
+  app.use(passport.initialize());
+  passport.use(createLocalStrategy(options));
+  passport.use(createJWTStrategy(options));
+  passport.use(createOAuthAccessTokenStrategy(options));
+}
+
+///////////////////////////
 //        HELPERS        //
 ///////////////////////////
 
-function authenticate(ignoredPaths, options) {
+function getAuthenticateMiddleware(authenticatorGetter, options, unauthenticatePaths) {
   var middleware = function(req, res, next) {
-    var isLoginRoute = req.url === options.routes.login;
-    var isLoginOAuthRoute = req.url === options.routes.loginOAuth;
-    var isOAuthProfileRoute = req.url === options.routes.oAuthProfile;
-    var authenticator;
+    var authenticator = authenticatorGetter(req);
 
-    // use local strategy for login request
-    if (isLoginRoute) {
-      authenticator = getAuthenticator('local');
-    } else if (isLoginOAuthRoute || isOAuthProfileRoute) {
-      authenticator = getAuthenticator('oAuthAccessToken');
+    if (authenticator) {
+      doAuthenticate(authenticator, req, res, next);
     } else {
-      authenticator = getAuthenticator('jwt');
+      next();
     }
-
-    req.log.info('Emitting before-authenticate event');
-    emitter.once('before-authenticate', function() {
-      req.log.info('Received before-authenticate event');
-
-      authenticator(req, res, function(err) {
-        var args = arguments;
-
-        if (!err && req.user) {
-          req.log.info('Emitting after-authenticate event');
-
-          // CAVEAT: req.user can be a user object OR a userId string for this event
-          emitter.once('after-authenticate', function() {
-            req.log.info('Received after-authenticate event');
-            next.apply(this, args);
-          }).emit('after-authenticate', req, res);
-        } else {
-          next.apply(this, args);
-        }
-      });
-    }).emit('before-authenticate', req, res);
   };
 
   middleware.unless = unless;
 
   return middleware.unless({
-    path: ignoredPaths
+    path: unauthenticatePaths
   });
+}
+
+function getAuthenticateByPathMiddleware(options, authToPathMap) {
+  var defaultStrategy = authToPathMap.default || 'jwt';
+  var unauthenticatePaths = authToPathMap.none || [];
+  var pathToStrategyMap = Object.keys(authToPathMap).reduce(function(result, strategy) {
+    strategy = strategy === 'oauth' ? 'oAuthAccessToken' : strategy;
+
+    if (strategy !== 'default' && strategy !== 'none') {
+      var pathsForAuth = authToPathMap[strategy];
+      pathsForAuth = Array.isArray(pathsForAuth) ? pathsForAuth : (pathsForAuth && [pathsForAuth] || []);
+
+      pathsForAuth.forEach(function(path) {
+        result[path] = strategy;
+      });
+    }
+
+    return result;
+  }, {});
+
+  return getAuthenticateMiddleware(function(req) {
+    if (pathToStrategyMap[req.url] || defaultStrategy !== 'none') {
+      return getAuthenticator(pathToStrategyMap[req.url] || defaultStrategy);
+    }
+  }, options, unauthenticatePaths);
+}
+
+function getAuthenticateLocalMiddleware(options, unauthenticatePaths) {
+  return getAuthenticateMiddleware(function(){
+    return getAuthenticator('local');
+  }, options, unauthenticatePaths);
+}
+
+function getAuthenticateOAuthMiddleware(options, unauthenticatePaths) {
+  return getAuthenticateMiddleware(function() {
+    return getAuthenticator('oAuthAccessToken');
+  }, options, unauthenticatePaths);
+}
+
+function getAuthenticateJWTMiddleware(options, unauthenticatePaths) {
+  return getAuthenticateMiddleware(function() {
+    return getAuthenticator('jwt');
+  }, options, unauthenticatePaths);
+}
+
+function doAuthenticate(authenticator, req, res, next) {
+  req.log.info('Emitting before-authenticate event');
+  emitter.once('before-authenticate', function() {
+    req.log.info('Received before-authenticate event');
+
+    authenticator(req, res, function(err) {
+      var args = arguments;
+
+      if (!err && req.user) {
+        req.log.info('Emitting after-authenticate event');
+
+        // CAVEAT: req.user can be a user object OR a userId string for this event
+        emitter.once('after-authenticate', function() {
+          req.log.info('Received after-authenticate event');
+          next.apply(this, args);
+        }).emit('after-authenticate', req, res);
+      } else {
+        next.apply(this, args);
+      }
+    });
+  }).emit('before-authenticate', req, res);
 }
 
 function hasLoginAttemptLimit(options) {
@@ -407,26 +472,3 @@ function maybeSaveLoginAttempt(user, options, contextLog) {
     return Promise.resolve();
   }
 }
-
-/////////////////////////
-//        INIT         //
-/////////////////////////
-
-function init(app, options) {
-  app.use(passport.initialize());
-  passport.use(createLocalStrategy(options));
-  passport.use(createJWTStrategy(options));
-  passport.use(createOAuthAccessTokenStrategy(options));
-}
-
-///////////////////////////
-//        PUBLIC         //
-///////////////////////////
-
-exports = module.exports = init;
-
-exports.authenticate = authenticate;
-exports.generateToken = generateToken;
-exports.getHashAndSaltForPassword = getHashAndSaltForPassword;
-exports.generateResetPasswordToken = generateResetPasswordToken;
-exports.getResetPasswordHashForToken = getResetPasswordHashForToken;
