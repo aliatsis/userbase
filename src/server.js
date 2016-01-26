@@ -93,7 +93,7 @@ function addIPv4Middleware(app) {
 function addErrorMiddleware(app, options) {
   // catch 404 and forward to error handler
   app.use(function(req, res, next) {
-    var err = new VError('Not Found');
+    var err = new VError('Not Found: ' + req.url);
     err.status = 404;
     next(err);
   });
